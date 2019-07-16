@@ -426,11 +426,17 @@ class TestBackendOps(unittest.TestCase):
     @opTest(
         [
             [m(1, 2), m(1, 3, 2), (1, 2)],
-            #[m(2, 3, 4, 5), m(2, 3, 5, 1), None],
+            [m(2, 3, 4, 5), m(2, 3, 5, 1), None],
+            # these tests disabled due to value mismatches between us and TF
+            # our community members are potentially filing a bug against TF with these cases as repros
+            #[m(1, 2, 2, 3), m(1, 2, 6, 2), (1, 3)],
             #[m(1, 2, 6, 2), m(1, 2, 2, 3), (3, 1)],
-            #[m(2, 3, 3, 2), m(2, 3, 4, 3), (1, 3)],
+            #[m(2, 3, 3, 2), m(2, 3, 2, 3), (1, 3)],
             [m(2, 5), m(2, 5), 1],
-            #[m(2, 4, 5), m(2, 5, 1), None],
+            [m(2, 3), m(2, 3, 5), 1],
+            [m(2, 3, 3), m(2, 3, 1), (2, 1)],
+            [m(2, 3, 1), m(2, 3, 3), (1, 2)],
+            [m(2, 4, 5), m(2, 5, 1), None],
         ],
         skip_tensorflow=False)
     def testBatchDot(self, b, x, y, ax):

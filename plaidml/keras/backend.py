@@ -139,13 +139,12 @@ class _Function(object):
         self._name = name
         self._input_names = ['I' + str(n) for n in range(len(inputs))]
         self._output_names = ['O' + str(n) for n in range(len(outputs))]
-        self._func = ptile.compose(
-            _ctx,
-            _device(),
-            list(zip(self._input_names, inputs)),
-            list(zip(self._output_names, outputs)),
-            updates,
-            name=name)
+        self._func = ptile.compose(_ctx,
+                                   _device(),
+                                   list(zip(self._input_names, inputs)),
+                                   list(zip(self._output_names, outputs)),
+                                   updates,
+                                   name=name)
         self._invoker = plaidml.Invoker(_ctx, self._func)
 
         self._input_types = {}
@@ -314,16 +313,16 @@ class BatchDot(ptile.Operation):
             function (X[{xdims}], Y[{ydims}]) -> (O) {{
                 {bcast_cmd_str}
                 O[{oidxs}: {odims}] = +(X[{xidxs}] * Y[{yidxs}]);
-            }}""".format(
-            bcast_cmd_str=' '.join(bcast_cmd_list),
-            xdims=', '.join(xdim_list),
-            ydims=', '.join(ydim_list),
-            odims=', '.join(odim_list),
-            xidxs=', '.join(xidx_list),
-            yidxs=', '.join(yidx_list),
-            oidxs=', '.join(oidx_list))
-        super(BatchDot, self).__init__(
-            f, [('X', x), ('Y', y)], [('O', ptile.Shape(x.shape.dtype, out_dims))], name=name)
+            }}""".format(bcast_cmd_str=' '.join(bcast_cmd_list),
+                         xdims=', '.join(xdim_list),
+                         ydims=', '.join(ydim_list),
+                         odims=', '.join(odim_list),
+                         xidxs=', '.join(xidx_list),
+                         yidxs=', '.join(yidx_list),
+                         oidxs=', '.join(oidx_list))
+        super(BatchDot, self).__init__(f, [('X', x), ('Y', y)],
+                                       [('O', ptile.Shape(x.shape.dtype, out_dims))],
+                                       name=name)
 
 
 def batch_dot(x, y, axes=None, name=None):
@@ -348,8 +347,7 @@ class BatchFlatten(ptile.Operation):
         outshape = ptile.Shape(x.shape.dtype, (x.shape.dims[0], rest_shape))
 
         code = ('function (I[{idims}]) -> (O) {{\n' + '  O = reshape(I, {odims});\n'
-                '}}').format(
-                    idims=', '.join(in_dim_list), odims=', '.join(out_dim_list))
+                '}}').format(idims=', '.join(in_dim_list), odims=', '.join(out_dim_list))
         super(BatchFlatten, self).__init__(code, [('I', x)], [('O', outshape)])
 
 
@@ -385,8 +383,9 @@ def bias_add(x, bias, data_format=None):
     if data_format is None:
         data_format = image_data_format()
     if data_format not in _CONV_DATA_FORMAT:
-        raise PlaidMLKerasException('Unrecognized data_format given to bias_add: \'' + str(
-            data_format) + '\'; only \'channels_first\' and \'channels_last\' recognized.')
+        raise PlaidMLKerasException(
+            'Unrecognized data_format given to bias_add: \'' + str(data_format) +
+            '\'; only \'channels_first\' and \'channels_last\' recognized.')
     try:
         bias_dims = bias.shape.dims
     except AttributeError:
@@ -455,8 +454,7 @@ class CategoricalCrossentropy(ptile.Operation):
                     LO = log(O);
                     TR[{fixed_idxs}:{fixed_dims}] = +(T[{fixed_idxs},y] * LO[{fixed_idxs},y]);
                     R = -TR;
-                }}""".format(
-                fixed_dims=fixed_dims, fixed_idxs=fixed_idxs)
+                }}""".format(fixed_dims=fixed_dims, fixed_idxs=fixed_idxs)
 
         super(CategoricalCrossentropy,
               self).__init__(code, [('O', output), ('T', target)],
@@ -659,27 +657,24 @@ def dropout(x, level, noise_shape=None, seed=None):
             "S{}".format(i) if v == ishape[i] or v in (None, -1) else "1"
             for i, v in enumerate(noise_shape)
         ])
-    rng_step = 'function (I, X[{szs}]) -> (O) {{ O = prng_step({args}); }}'.format(
-        szs=szs, args=args)
+    rng_step = 'function (I, X[{szs}]) -> (O) {{ O = prng_step({args}); }}'.format(szs=szs,
+                                                                                   args=args)
     rng_value = """function (I, X, L) -> (O) {
         R = 1.0 - L;
         M = 1.0 / R;
         O = (prng_value(I) < R ? X * M : 0.0);
     }"""
 
-    t = ptile.Operation(
-        rng_step, [('I', rng_state), ('X', x)],
-        [('O', ptile.Shape(plaidml.DType.UINT32, tuple()))],
-        name='PrngStep').sole_output()
-    n = ptile.Operation(
-        'function (I) -> (O) { O = prng_state(I); }', [('I', t)],
-        [('O', ptile.Shape(plaidml.DType.UINT32, (3, _k_rng_size)))],
-        name='PrngState').sole_output()
-    o = ptile.Operation(
-        rng_value, [('I', t), ('X', x), ('L', level)],
-        [('O', ptile.Shape(plaidml.DType.FLOAT32, x.shape.dims))],
-        side_effects=[(rng_state, n)],
-        name='PrngValue').sole_output()
+    t = ptile.Operation(rng_step, [('I', rng_state), ('X', x)],
+                        [('O', ptile.Shape(plaidml.DType.UINT32, tuple()))],
+                        name='PrngStep').sole_output()
+    n = ptile.Operation('function (I) -> (O) { O = prng_state(I); }', [('I', t)],
+                        [('O', ptile.Shape(plaidml.DType.UINT32, (3, _k_rng_size)))],
+                        name='PrngState').sole_output()
+    o = ptile.Operation(rng_value, [('I', t), ('X', x), ('L', level)],
+                        [('O', ptile.Shape(plaidml.DType.FLOAT32, x.shape.dims))],
+                        side_effects=[(rng_state, n)],
+                        name='PrngValue').sole_output()
 
     return o
 
@@ -726,13 +721,13 @@ class ExpandDims(ptile.Operation):
         f = """
             function (IN[{slist_in}]) -> (OUT) {{
                 OUT[{ilist_out} : {slist_out}] = =(IN[{ilist_in}]);
-            }}""".format(
-            slist_in=', '.join(slist_in),
-            slist_out=', '.join(slist_out),
-            ilist_in=', '.join(ilist_in),
-            ilist_out=', '.join(ilist_out))
-        super(ExpandDims, self).__init__(
-            f, [('IN', x)], [('OUT', ptile.Shape(x.shape.dtype, newdims))], name=name)
+            }}""".format(slist_in=', '.join(slist_in),
+                         slist_out=', '.join(slist_out),
+                         ilist_in=', '.join(ilist_in),
+                         ilist_out=', '.join(ilist_out))
+        super(ExpandDims, self).__init__(f, [('IN', x)],
+                                         [('OUT', ptile.Shape(x.shape.dtype, newdims))],
+                                         name=name)
 
 
 expand_dims = ExpandDims.function
@@ -994,8 +989,12 @@ def normalize_batch_in_training(x, gamma, beta, reduction_axes, epsilon=1e-3):
     # final axis as the sole element of axis requires broadcasting,
     # but I don't see it ...
     # Indeed, this passes unit tests with a non-final axis selected
-    normalized_tensor = batch_normalization(
-        x=x, mean=m, var=v, beta=beta, gamma=gamma, epsilon=epsilon)
+    normalized_tensor = batch_normalization(x=x,
+                                            mean=m,
+                                            var=v,
+                                            beta=beta,
+                                            gamma=gamma,
+                                            epsilon=epsilon)
 
     # Tensorflow and Theano disagree on whether mean and var should be squeezed
     # here. For now, going with Theano for simplicity.
@@ -1015,9 +1014,8 @@ class OneHot(ptile.Operation):
         f = """
             function (Idx[{idim}], Count[C]) -> (O) {{
                 O[{iidx}, c : {idim}, C] = =(Idx[{iidx}] == Count[c]);
-            }}""".format(
-            idim=', '.join(['I{}'.format(k) for k in range(indices.shape.ndims)]),
-            iidx=', '.join(['i{}'.format(k) for k in range(indices.shape.ndims)]))
+            }}""".format(idim=', '.join(['I{}'.format(k) for k in range(indices.shape.ndims)]),
+                         iidx=', '.join(['i{}'.format(k) for k in range(indices.shape.ndims)]))
 
         outshape = ptile.Shape(plaidml.DType.BOOLEAN,
                                tuple(list(indices.shape.dims) + [num_classes]))
@@ -1042,8 +1040,7 @@ def ones_like(x, dtype=None, name=None):
     f = """
         function (IN[{sizes}], ONE[SZ]) -> (OUT) {{
             OUT[{dims} : {sizes}] = =(ONE[0]);
-        }}""".format(
-        sizes=sizes, dims=dims)
+        }}""".format(sizes=sizes, dims=dims)
     return ptile.Operation(f, [('IN', x), ('ONE', a_one)],
                            [('OUT', ptile.Shape(ptile.convert_np_dtype_to_pml(dtype), x.shape.dims))],
                            name='OnesLike') \
@@ -1069,8 +1066,9 @@ def permute_dimensions(x, pattern):
 def placeholder(shape=None, ndim=None, dtype=None, sparse=False, name=None):
     dtype = ptile.convert_np_dtype_to_pml(dtype or floatx())
     if shape is not None:
-        return ptile.Value.from_dimensions(
-            shape, dtype, name=_prepend_name_scope(name, 'placeholder'))
+        return ptile.Value.from_dimensions(shape,
+                                           dtype,
+                                           name=_prepend_name_scope(name, 'placeholder'))
     elif ndim is not None:
         return ptile.Value.from_ndims(ndim, dtype, name=_prepend_name_scope(name, 'placeholder'))
     else:
@@ -1094,34 +1092,31 @@ def pool(x, pool_size, strides=None, padding='valid', data_format=None, pool_mod
         padding = _AUTO_PAD[padding]
     except KeyError:
         six.raise_from(ValueError('Unrecognized padding: {}'.format(padding)), None)
-    return op.pool(
-        data=x,
-        mode=pool_mode,
-        kernel_shape=pool_size,
-        strides=strides,
-        padding=padding,
-        data_format=data_format,
-        name=cur_name())
+    return op.pool(data=x,
+                   mode=pool_mode,
+                   kernel_shape=pool_size,
+                   strides=strides,
+                   padding=padding,
+                   data_format=data_format,
+                   name=cur_name())
 
 
 def pool2d(x, pool_size, strides=(1, 1), padding='valid', data_format=None, pool_mode='max'):
-    return pool(
-        x,
-        pool_size,
-        strides=strides,
-        padding=padding,
-        data_format=data_format,
-        pool_mode=pool_mode)
+    return pool(x,
+                pool_size,
+                strides=strides,
+                padding=padding,
+                data_format=data_format,
+                pool_mode=pool_mode)
 
 
 def pool3d(x, pool_size, strides=(1, 1, 1), padding='valid', data_format=None, pool_mode='max'):
-    return pool(
-        x,
-        pool_size,
-        strides=strides,
-        padding=padding,
-        data_format=data_format,
-        pool_mode=pool_mode)
+    return pool(x,
+                pool_size,
+                strides=strides,
+                padding=padding,
+                data_format=data_format,
+                pool_mode=pool_mode)
 
 
 def pow(x, a):
@@ -1135,8 +1130,10 @@ def print_tensor(x, message=''):
 
 
 def prod(value, axis=None, keepdims=False):
-    return op.prod(
-        value, axes=axis, keepdims=keepdims, floatx=ptile.convert_np_dtype_to_pml(floatx()))
+    return op.prod(value,
+                   axes=axis,
+                   keepdims=keepdims,
+                   floatx=ptile.convert_np_dtype_to_pml(floatx()))
 
 
 def random_binomial(shape, p=0.0, dtype=None, see=None):
@@ -1184,20 +1181,18 @@ def random_uniform(shape, minval=0.0, maxval=1.0, dtype=None, seed=None):
             shape_inputs.append((shape_var, value))
         else:
             shape_args.append(str(value))
-    t = ptile.Operation(
-        'function ({inputs}) -> (O) {{ O = prng_step({args}); }}'.format(
-            inputs=', '.join(['I'] + shape_vars), args=', '.join(['I'] + shape_args)),
-        [('I', rng_state)] + shape_inputs, [('O', ptile.Shape(plaidml.DType.UINT32, tuple()))],
-        name='PrngStep').sole_output()
-    n = ptile.Operation(
-        'function (I) -> (O) { O = prng_state(I); }', [('I', t)],
-        [('O', ptile.Shape(plaidml.DType.UINT32, (3, _k_rng_size)))],
-        name='PrngState').sole_output()
-    o = ptile.Operation(
-        'function (I) -> (O) { O = prng_value(I); }', [('I', t)],
-        [('O', ptile.Shape(plaidml.DType.FLOAT32, shape))],
-        side_effects=[(rng_state, n)],
-        name='PrngValue').sole_output()
+    t = ptile.Operation('function ({inputs}) -> (O) {{ O = prng_step({args}); }}'.format(
+        inputs=', '.join(['I'] + shape_vars), args=', '.join(['I'] + shape_args)),
+                        [('I', rng_state)] + shape_inputs,
+                        [('O', ptile.Shape(plaidml.DType.UINT32, tuple()))],
+                        name='PrngStep').sole_output()
+    n = ptile.Operation('function (I) -> (O) { O = prng_state(I); }', [('I', t)],
+                        [('O', ptile.Shape(plaidml.DType.UINT32, (3, _k_rng_size)))],
+                        name='PrngState').sole_output()
+    o = ptile.Operation('function (I) -> (O) { O = prng_value(I); }', [('I', t)],
+                        [('O', ptile.Shape(plaidml.DType.FLOAT32, shape))],
+                        side_effects=[(rng_state, n)],
+                        name='PrngValue').sole_output()
 
     if dtype != 'float32':
         o = cast(o, dtype)
@@ -1224,10 +1219,10 @@ def repeat(x, n):
            function (I[N0, N1]) -> (O) {{
                O[i0, r, i1: N0, {reps}, N1] = =(I[i0, i1]);
            }}""".format(reps=n)
-    return ptile.Operation(
-        code, [('I', x)], [('O', ptile.Shape(x.shape.dtype,
-                                             (x.shape.dims[0], n, x.shape.dims[1])))],
-        name='Repeat').sole_output()
+    return ptile.Operation(code, [('I', x)],
+                           [('O', ptile.Shape(x.shape.dtype,
+                                              (x.shape.dims[0], n, x.shape.dims[1])))],
+                           name='Repeat').sole_output()
 
 
 def repeat_elements(x, rep, axis):
@@ -1252,12 +1247,11 @@ def repeat_elements(x, rep, axis):
     f = """
         function (I[{idims}]) -> (O) {{
             O[{oidxs} : {odims}] = =(I[{iidxs}]), k < {rep} no_defract;
-        }}""".format(
-        idims=', '.join(idim_list),
-        iidxs=', '.join(iidx_list),
-        odims=', '.join(odim_list),
-        oidxs=', '.join(oidx_list),
-        rep=str(rep))
+        }}""".format(idims=', '.join(idim_list),
+                     iidxs=', '.join(iidx_list),
+                     odims=', '.join(odim_list),
+                     oidxs=', '.join(oidx_list),
+                     rep=str(rep))
     return ptile.Operation(f, [('I', x)], [('O', ptile.Shape(x.shape.dtype, out_shape))],
                            name='RepeatElements') \
                            .sole_output()
@@ -1368,8 +1362,7 @@ def reverse(x, axes):
     f = """
         function (I[{dims}]) -> (O) {{
             O[{out_idxs}: {dims}] = =(I[{in_idxs}]);
-        }}""".format(
-        dims=dims, out_idxs=out_idxs, in_idxs=in_idxs)
+        }}""".format(dims=dims, out_idxs=out_idxs, in_idxs=in_idxs)
 
     return ptile.Operation(f, [('I', x)], [('O', x.shape)], name='Reverse').sole_output()
 
@@ -1408,13 +1401,13 @@ def rnn(step_function,
                     "Generating RNN at time step {} with no previous time step".format(ii))
             f = "function (I[B, {sizes}]) -> (O) {{ O[b, 0, {idxs} : B, {T}, {sizes}] = =(I[b, {idxs}]); }}"
             f = f.format(sizes=sizes, idxs=idxs, T=t)
-            return ptile.Operation(
-                f, [('I', val)], [('O', newshape)], name='TimeExpand').sole_output()
+            return ptile.Operation(f, [('I', val)], [('O', newshape)],
+                                   name='TimeExpand').sole_output()
         else:
             f = "function (I[B, {sizes}], P) -> (O) {{ O[b, {ii}, {idxs} : B, {T}, {sizes}] = =(I[b, {idxs}]) default P; }}"
             f = f.format(sizes=sizes, idxs=idxs, ii=ii, T=t)
-            return ptile.Operation(
-                f, [('I', val), ('P', prev)], [('O', newshape)], name='TimeExpand').sole_output()
+            return ptile.Operation(f, [('I', val), ('P', prev)], [('O', newshape)],
+                                   name='TimeExpand').sole_output()
 
     states = initial_states
     output = None
@@ -1451,23 +1444,21 @@ def separable_conv(x,
              'multiplier.\nReceived {} v {} * {} (from full shapes {} and ' + '{})').format(
                  pointwise_kernel.shape.dims[-2], depthwise_kernel.shape.dims[-2],
                  depthwise_kernel.shape.dims[-1], pointwise_kernel.shape, depthwise_kernel.shape))
-    intermediate = conv(
-        x,
-        depthwise_kernel,
-        strides=strides,
-        padding=padding,
-        data_format=data_format,
-        dilation_rate=dilation_rate,
-        channelwise=True)
+    intermediate = conv(x,
+                        depthwise_kernel,
+                        strides=strides,
+                        padding=padding,
+                        data_format=data_format,
+                        dilation_rate=dilation_rate,
+                        channelwise=True)
     rank = x.shape.ndims - 2
     ones = tuple(1 for _ in range(rank))
-    return conv(
-        intermediate,
-        pointwise_kernel,
-        strides=ones,
-        padding='valid',
-        data_format=data_format,
-        dilation_rate=ones)
+    return conv(intermediate,
+                pointwise_kernel,
+                strides=ones,
+                padding='valid',
+                data_format=data_format,
+                dilation_rate=ones)
 
 
 def separable_conv2d(x,
@@ -1595,8 +1586,7 @@ class SpatialPadding(ptile.Operation):
             function (I[{in_dims}]) -> (O) {{
                 O[{out_idxs} : {out_dims}] = =(I[{in_idxs}]);
             }}
-        """).format(
-            in_dims=in_dims, in_idxs=in_idxs, out_dims=out_dims, out_idxs=out_idxs)
+        """).format(in_dims=in_dims, in_idxs=in_idxs, out_dims=out_dims, out_idxs=out_idxs)
 
         super(SpatialPadding, self).__init__(f, [('I', x)],
                                              [('O', ptile.Shape(x.shape.dtype, numeric_out_dims))])
@@ -1646,8 +1636,10 @@ def stop_gradient(variables):
 
 
 def sum(x, axis=None, keepdims=False):
-    return op.summation(
-        x, axes=axis, keepdims=keepdims, floatx=ptile.convert_np_dtype_to_pml(floatx()))
+    return op.summation(x,
+                        axes=axis,
+                        keepdims=keepdims,
+                        floatx=ptile.convert_np_dtype_to_pml(floatx()))
 
 
 class Switch(ptile.Operation):
@@ -1682,11 +1674,10 @@ def tile(x, n):
     f = """
         function (I[{sizes}]) -> (O) {{
             O[{out_idx} : {out_sizes}] = =(I[{in_idx}]), {cons} no_defract;
-        }}""".format(
-        sizes=sizes, out_idx=out_idx, out_sizes=out_sizes, in_idx=in_idx, cons=cons)
+        }}""".format(sizes=sizes, out_idx=out_idx, out_sizes=out_sizes, in_idx=in_idx, cons=cons)
     out_dims = tuple(x.shape.dims[i] * n[i] for i in range(x.shape.ndims))
-    return ptile.Operation(
-        f, [('I', x)], [('O', ptile.Shape(x.shape.dtype, out_dims))], name='Tile').sole_output()
+    return ptile.Operation(f, [('I', x)], [('O', ptile.Shape(x.shape.dtype, out_dims))],
+                           name='Tile').sole_output()
 
 
 def to_dense(tensor):
@@ -1718,8 +1709,10 @@ def update_sub(x, decrement):
 
 
 def var(x, axis=None, keepdims=False):
-    return op.variance(
-        x, axes=axis, keepdims=keepdims, floatx=ptile.convert_np_dtype_to_pml(floatx()))
+    return op.variance(x,
+                       axes=axis,
+                       keepdims=keepdims,
+                       floatx=ptile.convert_np_dtype_to_pml(floatx()))
 
 
 def variable(value, dtype=None, name=None, constraint=None):
@@ -1771,8 +1764,7 @@ def zeros_like(x, dtype=floatx(), name=None):
     f = """
         function (IN[{sizes}], ZERO[SZ]) -> (OUT) {{
             OUT[{dims} : {sizes}] = =(ZERO[0]);
-        }}""".format(
-        sizes=sizes, dims=dims)
+        }}""".format(sizes=sizes, dims=dims)
     return ptile.Operation(f, [('IN', x), ('ZERO', a_zero)],
                            [('OUT', ptile.Shape(ptile.convert_np_dtype_to_pml(dtype), x.shape.dims))],
                            name='ZerosLike') \
