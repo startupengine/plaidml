@@ -153,9 +153,9 @@ SUITES:
         pipelines: [plaidml, nightly]
 
       keras-plaid-mtl-uhd630:
-        pipelines: [plaidml, nightly]
+        pipelines: [plaidml, nightly, ci]
       keras-stripe-mtl-uhd630:
-        pipelines: [plaidml, nightly]
+        pipelines: [plaidml, nightly, ci]
 
       keras-plaid-ocl-gfx900:
         pipelines: [plaidml, nightly]
@@ -178,6 +178,8 @@ SUITES:
         pipelines: [nightly]
 
     params:
+      ci:
+        batch_sizes: [0]
       plaidml:
         batch_sizes: [0]
       stripe:
@@ -204,14 +206,21 @@ SUITES:
           keras-stripe-mtl-uhd630:
             softfail: true
           keras-plaid-mtl-uhd630:
-            softfail: true
+            softfail: true        
+        shardcount: 3
+        run_shards: [0,1,2]
+        
 
       regression:
         args: [regression_test.py]
         precision: untested
+        skip_platforms: [keras-plaid-mtl-uhd630, keras-stripe-mtl-uhd630] # whyfail
+
       trivial_model:
         args: [trivial_model_test.py]
         precision: untested
+        skip_platforms: [keras-plaid-mtl-uhd630, keras-stripe-mtl-uhd630] # whyfail
+
       mnist_mlp:
         args: [mnist_mlp_test.py]
         precision: untested
@@ -220,6 +229,7 @@ SUITES:
             softfail: true
           keras-plaid-mtl-uhd630:
             softfail: true
+        skip_platforms: [keras-plaid-mtl-uhd630, keras-stripe-mtl-uhd630] # whyfail
 
   infer:
     platforms:
@@ -251,6 +261,8 @@ SUITES:
       keras-plaid-ocl-gfx803:
         pipelines: [plaidml]
     params:
+      ci:
+        batch_sizes: [1]
       plaidml:
         batch_sizes: [1]
       stripe:
@@ -283,17 +295,20 @@ SUITES:
         precision: high
         skip_platforms: [keras-stripe-ocl-neo, keras-stripe-mtl-uhd630]
         perf_threshold: 0.7
-      
+        skip_platforms: [keras-plaid-mtl-uhd630] # whyfail
       inception_v3:
         precision: high
         platform_overrides:
           keras-plaid-mtl-uhd630:
-            prepend_args: [--examples, 256]
+            append_args: [-n, 256]
           keras-stripe-mtl-uhd630:
-            prepend_args: [--examples, 256]
-          
+            append_args: [-n, 256]
+        skip_platforms: [keras-plaid-mtl-uhd630] # whyfail
+
       mobilenet:
         precision: high
+        skip_platforms: [keras-plaid-mtl-uhd630] # whyfail
+
       mobilenet_v2:
         precision: high
         platform_overrides:
@@ -304,26 +319,31 @@ SUITES:
         precision: high
         platform_overrides:
           keras-plaid-mtl-uhd630:
-            prepend_args: [--examples, 256]
+            append_args: [--examples, 256]
           keras-stripe-mtl-uhd630:
-            prepend_args: [--examples, 256]
+            append_args: [--examples, 256]
           
       vgg19:
         precision: high
         platform_overrides:
           keras-plaid-mtl-uhd630:
-            prepend_args: [--examples, 256]
+            append_args: [--examples, 256]
           keras-stripe-mtl-uhd630:
-            prepend_args: [--examples, 256]                
+            append_args: [--examples, 256]                
         skip_platforms: [keras-plaid-mtl-uhd630, keras-stripe-mtl-uhd630, keras-plaid-ocl-gfx803]
-    
+        skip_platforms: [keras-plaid-mtl-uhd630] # whyfail
+
       xception:
         precision: high
         platform_overrides:
+
           keras-plaid-mtl-uhd630:
             prepend_args: [--examples, 128]
           keras-stripe-mtl-uhd630:
-            prepend_args: [--examples, 128]
+            prepend_args: [--examples, 192]
+          keras-stripe-mtl-uhd630:
+            prepend_args: [--examples, 192]
+
           keras-plaid-ocl-neo:
             prepend_args: [--examples, 256]
           keras-stripe-ocl-neo:

@@ -7,6 +7,7 @@ import platform
 import shutil
 import subprocess
 import sys
+import tarfile
 
 import util
 
@@ -69,12 +70,24 @@ def cmd_pipeline(args, remainder):
             variant = pinfo['variant']
             if args.pipeline not in platform['pipelines']:
                 continue
+
             for wkey, workload in suite['workloads'].items():
                 popt = util.PlanOption(suite, workload, pkey)
                 skip = workload.get('skip_platforms', [])
                 if pkey in skip:
                     continue
+
+                shc = popt.get('shardcount')
+
+                if shc:
+                    for shard in popt.get('run_shards'):
+                        rsh = shard
+                        shard = 'shard'
+                else:
+                    shard = None
+
                 for batch_size in suite['params'][args.pipeline]['batch_sizes']:
+
                     tests.append(
                         dict(suite=skey,
                              workload=wkey,
@@ -85,6 +98,9 @@ def cmd_pipeline(args, remainder):
                              retry=popt.get('retry'),
                              softfail=popt.get('softfail'),
                              python=get_python(variant),
+                             shard=shard,
+                             shardcount=shc,
+                             rsh=rsh,
                              emoji=get_emoji(variant),
                              engine=get_engine(pkey)))
 
@@ -98,13 +114,46 @@ def cmd_pipeline(args, remainder):
         print(yml)
 
 
+def wheel_path(arg):
+    p = pathlib.Path('bazel-bin')
+    wp = p / arg / 'wheel.pkg' / 'dist'
+    if platform.system() == 'Windows':
+        p = pathlib.WindowsPath('bazel-bin')
+        p = p.resolve()
+        wp = p / arg / 'wheel.pkg' / 'dist'
+        return (wp)
+    else:
+        return (wp)
+
+
+def wheel_clean(arg):
+    wc = wheel_path(arg)
+    print(wc.resolve())
+    ws = wc.glob('*.whl')
+    for f in ws:
+        print(f.resolve())
+        if f.is_file():
+            print('trashing')
+            f.replace('trash')
+
+
 def cmd_build(args, remainder):
+
+    util.printf('--- :snake: pre-build steps... ')
+
+    wheel_clean('plaidml')
+    wheel_clean('plaidbench')
+    wheel_clean('plaidml/keras')
+
     common_args = []
     common_args += ['--config={}'.format(args.variant)]
     common_args += ['--define=version={}'.format(args.version)]
     common_args += ['--explain={}'.format(os.path.abspath('explain.log'))]
     common_args += ['--verbose_failures']
     common_args += ['--verbose_explanations']
+
+    util.printf('--- :bazel: Running Build ...')
+
     if platform.system() == 'Windows':
         util.check_call(['git', 'config', 'core.symlinks', 'true'])
         cenv = util.CondaEnv(pathlib.Path('.cenv'))
@@ -122,13 +171,40 @@ def cmd_build(args, remainder):
         'build',
         args.variant,
     )
+
+    util.printf('--- :buildkite: Uploading artifacts...')
+    pw = wheel_path('plaidml')
+    pbw = wheel_path('plaidbench')
+    pkw = wheel_path('plaidml/keras')
+    util.check_call(['buildkite-agent', 'artifact', 'upload', '*.whl'], cwd=pw)
+    util.check_call(['buildkite-agent', 'artifact', 'upload', '*.whl'], cwd=pbw)
+    util.check_call(['buildkite-agent', 'artifact', 'upload', '*.whl'], cwd=pkw)
     os.makedirs(archive_dir, exist_ok=True)
     shutil.copy(os.path.join('bazel-bin', 'pkg.tar.gz'), archive_dir)
+    shutil.rmtree(os.path.join('bazel-bin', ''), ignore_errors=True)
 
 
 def cmd_test(args, remainder):
     import harness
     harness.run(args)
+
+
+def make_tarfile(output_filename, source_dir):
+    with tarfile.open(output_filename, "w:gz") as tar:
+        tar.add(source_dir, arcname=os.path.basename(source_dir))
+
+
+def cmd_pack(arg):
+    import yaml
+    with open('ci/plan.yml') as file_:
+        plan = yaml.safe_load(file_)
+        pd = pathlib.Path('tmp').mkdir(parents=True, exist_ok=True)
+    for variant in plan['VARIANTS'].keys():
+        vd = pathlib.Path('tmp' + os.sep + variant).mkdir(parents=True, exist_ok=True)
+        print('downloading ' + variant + ' wheels...')
+        util.check_call(['buildkite-agent', 'artifact', 'download', '*.whl', arg], cwd=vd)
+    print('packing all_wheels...')
+    make_tarfile('all_wheels.tar.gz', 'tmp')
 
 
 def cmd_report(args, remainder):
@@ -140,6 +216,20 @@ def cmd_report(args, remainder):
     cmd += [archive_dir]
     cmd += remainder
     util.check_call(cmd)
+
+    pd = 'tmp'
+    cmd_pack(pd)
+    util.check_call(['buildkite-agent', 'artifact', 'upload', 'all_wheels.tar.gz'])
+    shutil.rmtree('tmp')
+    os.unlink('all_wheels.tar.gz')
+    try:
+        os.unlink('trash')
+    except OSError as e:
+        print(e.errno)
+
+    # TODO
+    # check ENV variable? to determine if this is a release or a nightly build
+    # run twine to pusb to pypi for release?
 
 
 def make_cmd_build(parent):

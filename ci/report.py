@@ -104,13 +104,14 @@ def ratio_plot(path, labels, values, title):
     plt.yticks(y_pos, labels)
 
     for patch, value in zip(ax.patches, values):
-        ax.text(patch.get_width() - 0.06,
-                patch.get_y() + 0.01,
-                '%.2f' % round(value, 2),
-                ha='center',
-                va='bottom',
-                color='white',
-                zorder=20)
+        ax.text(
+            patch.get_width() - 0.06,
+            patch.get_y() + 0.01,
+            '%.2f' % round(value, 2),
+            ha='center',
+            va='bottom',
+            color='white',
+            zorder=20)
     plt.savefig(path, bbox_inches='tight')
     plt.close()
 

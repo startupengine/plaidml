@@ -17,10 +17,12 @@ steps:
 # test phase
 
 {{#tests}}
-  - label: '{{emoji}}{{engine}} {{suite}}/{{workload}}/{{platform}} BATCH_SIZE={{batch_size}}'
+  - label: '{{emoji}}{{engine}} {{suite}}/{{workload}}/{{platform}} BATCH_SIZE={{batch_size}} '
     command: |
       {{python}} -m pip install pyyaml --user
-      {{python}} ci/buildkite.py test {{platform}} {{suite}} {{workload}} {{batch_size}}
+      {{python}} ci/buildkite.py test {{platform}} {{suite}} {{workload}} {{batch_size}} 
+      {{#shard}}--shard-count {{shardcount}} --run_shard {{rsh}} {{/shard}}
+
   {{#softfail}}
     soft_fail: true
   {{/softfail}}
