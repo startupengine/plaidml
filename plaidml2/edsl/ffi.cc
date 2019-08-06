@@ -2,20 +2,37 @@
 
 #include "plaidml2/edsl/ffi.h"
 
+#include <algorithm>
+#include <memory>
 #include <mutex>
 #include <sstream>
+#include <string>
+#include <vector>
 
 #include <boost/format.hpp>
+
+#include "mlir/IR/Builders.h"
+#include "mlir/IR/Module.h"
 
 #include "base/util/logging.h"
 #include "plaidml2/core/internal.h"
 #include "plaidml2/edsl/derivs.h"
+#include "pmlc/dialect/hir/ops.h"
+#include "pmlc/dialect/scalar/ops.h"
 #include "tile/lang/ast/ast.h"
 #include "tile/lang/ast/gradient.h"
 
 using namespace vertexai::tile;             // NOLINT
 using namespace vertexai::tile::lang;       // NOLINT
 using namespace vertexai::tile::lang::ast;  // NOLINT
+using namespace pmlc::dialect::hir;         // NOLINT
+using namespace pmlc::dialect::scalar;      // NOLINT
+
+using mlir::MLIRContext;
+using mlir::ModuleOp;
+using mlir::OpBuilder;
+using mlir::Type;
+using mlir::UnknownLoc;
 using plaidml::core::ffi_wrap;
 using plaidml::core::ffi_wrap_void;
 
@@ -229,6 +246,25 @@ plaidml_expr* plaidml_expr_dim(  //
   });
 }
 
+class GlobalContext {
+ public:
+  static GlobalContext* get() {
+    static thread_local GlobalContext context;
+    return &context;
+  }
+
+  static OpBuilder* get_builder() { return &get()->builder; }
+
+ private:
+  MLIRContext context;
+  ModuleOp module;
+  OpBuilder builder;
+
+  GlobalContext()
+      : module(ModuleOp::create(UnknownLoc::get(&context))),  //
+        builder(module.getBody()) {}
+};
+
 plaidml_expr* plaidml_expr_param(  //
     plaidml_error* err,            //
     plaidml_logical_shape* shape,  //
@@ -240,7 +276,21 @@ plaidml_expr* plaidml_expr_param(  //
       expr->buffer = buffer->buffer;
     }
     expr->ComputeShape(expr, shape->shape);
-    return new plaidml_expr{expr};
+    // here
+    std::vector<int64_t> dims(shape->shape.dims.size());
+    for (size_t i = 0; i < dims.size(); i++) {
+      auto int_expr = std::dynamic_pointer_cast<DimIntExpr>(shape->shape.dims[i].expr);
+      if (int_expr) {
+        dims[i] = int_expr->value;
+      } else {
+        dims[i] = 0;
+      }
+    }
+    auto builder = GlobalContext::get_builder();
+    auto elt_type = builder->getType<ScalarType>(shape->shape.dtype);
+    auto shape = RankedTensorType::get(dims, elt_type);
+    auto op = builder->create<PlaceholderOp>(builder->getUnknownLoc(), shape);
+    return new plaidml_expr{expr, op.getOperation()};
   });
 }
 
@@ -372,7 +422,15 @@ int64_t plaidml_expr_int_get_value(  //
 plaidml_expr* plaidml_expr_float(  //
     plaidml_error* err,            //
     double value) {
-  return ffi_wrap<plaidml_expr*>(err, nullptr, [&] {  //
+  return ffi_wrap<plaidml_expr*>(err, nullptr, [&] {
+    // ScalarConstantOp
+    // auto fp_type = Type::getFromOpaquePointer(type.type).cast<FloatType>();
+    // auto fp_value = llvm::APFloat(value);
+    // bool lostPrecision;
+    // value.convert(floatType.getFloatSemantics(), APFloat::rmNearestTiesToEven, &lostPrecision);
+    // auto std_f32 = FloatType::getF32(globalContext());
+    // auto f32 = ScalarType::get(globalContext(), DataType::FLOAT32);
+    // auto x2 = builder.create<ScalarConstantOp>(loc, f32, builder.getFloatAttr(std_f32, 1));
     return new plaidml_expr{std::make_shared<FloatConst>(value)};
   });
 }
@@ -381,6 +439,8 @@ double plaidml_expr_float_get_value(  //
     plaidml_error* err,               //
     plaidml_expr* expr) {
   return ffi_wrap<double>(err, 0, [&] {
+    // auto value = expr->value->getValue();
+    // value->dump();
     auto float_expr = std::dynamic_pointer_cast<FloatConst>(expr->expr);
     if (!float_expr) {
       throw std::runtime_error("plaidml_expr_float_get_value can only be used on an FloatConst");

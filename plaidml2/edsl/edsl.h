@@ -294,6 +294,8 @@ class LogicalShape {
             dims.data(),                                                             //
             layout.c_str()))) {}
 
+  plaidml_logical_shape* as_ptr() const { return ptr_.get(); }
+
   std::string str() const {  //
     return ffi::str(ffi::call<plaidml_string*>(plaidml_logical_shape_repr, ptr_.get()));
   }
@@ -380,15 +382,6 @@ class Tensor {
     impl_->ptr = details::make_plaidml_expr(ffi::call<plaidml_expr*>(plaidml_expr_dim, dim.impl_->ptr.get()));
   }
 
-  explicit Tensor(const LogicalShape& shape) : impl_(new Impl) {
-    impl_->ptr = details::make_plaidml_expr(  //
-        ffi::call<plaidml_expr*>(             //
-            plaidml_expr_param,               //
-            shape.ptr_.get(),                 //
-            nullptr,                          //
-            ""));
-  }
-
   explicit Tensor(const std::vector<TensorDim>& dims, const std::string& layout = "") : impl_(new Impl) {
     impl_->dims = dims;
     impl_->has_dims = true;
@@ -399,15 +392,6 @@ class Tensor {
     impl_->dims = dims;
     impl_->has_dims = true;
     impl_->layout = layout;
-  }
-
-  Tensor(const std::string& name, const LogicalShape& shape) : impl_(new Impl) {
-    impl_->ptr = details::make_plaidml_expr(  //
-        ffi::call<plaidml_expr*>(             //
-            plaidml_expr_param,               //
-            shape.ptr_.get(),                 //
-            nullptr,                          //
-            name.c_str()));
   }
 
   Tensor(const std::string& name, const std::vector<TensorDim>& dims, const std::string& layout = "")
@@ -552,6 +536,25 @@ Tensor TensorOutput(Ts... dims) {
 
 inline Tensor TensorOutput(const std::vector<TensorDim>& dims, const std::string& layout = "") {  //
   return Tensor(dims, layout);
+}
+
+inline Tensor Placeholder(      //
+    const LogicalShape& shape,  //
+    const std::string& name = "") {
+  auto ptr = ffi::call<plaidml_expr*>(  //
+      plaidml_expr_param,               //
+      shape.as_ptr(),                   //
+      nullptr,                          //
+      name.c_str());
+  return Tensor(ptr);
+}
+
+inline Tensor Placeholder(             //
+    plaidml_datatype dtype,            //
+    const std::vector<int64_t>& dims,  //
+    const std::string& name = "") {
+  LogicalShape shape(dtype, dims);
+  return Placeholder(shape, name);
 }
 
 Tensor Call(const std::string& fn, const std::vector<Tensor>& args);

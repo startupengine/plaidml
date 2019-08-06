@@ -1,47 +1,46 @@
 // Copyright 2019, Intel Corporation
 
-include "mlir/IR/OpBase.td"
+include "pmlc/dialect/scalar/predicates.td"
+
+// Whether a type is a RankedTensorType.
+def IsRankedTensorTypePred : CPred<"$_self.isa<RankedTensorType>()">;
+
+class RankedTensorOf<list<Type> allowedTypes> :
+  ShapedContainerType<allowedTypes, IsRankedTensorTypePred, "ranked-tensor">;
+
+def AnyRankedTensor : RankedTensorOf<[AnyType]>;
 
 def HirDialect : Dialect {
-  let name = "pml.hir";
+  let name = "pml_hir";
   let cppNamespace = "pmlc::dialect::hir";
 }
-
-// def TensorType :
-//     Type<
-//         CPred<"$_self.isa<TensorType>()">,
-//         "Plaid AST Tensor Type"
-//     >;
 
 class HirOp<string mnemonic, list<OpTrait> traits = [NoSideEffect]> :
     Op<HirDialect, mnemonic, traits> {}
 
-def ContractionOp : HirOp<"contraction"> {
-    let summary = "Contraction operation";
+def PlaceholderOp : HirOp<"var"> {
+  let summary = "placeholder operation";
+  let results = (outs AnyRankedTensor);
+
+  let builders = [OpBuilder<
+    "Builder* builder, OperationState* result, RankedTensorType type", [{
+       result->types.push_back(type);
+     }]
+  >];
 }
 
-// class PlaidUnaryOp<string mnemonic, list<OpTrait> traits = [NoSideEffect]> :
-//     PlaidAstOp<mnemonic, traits>,
-//     Arguments<(ins TensorType:$arg)>,
-//     Results<(outs TensorType:$res)>
-// {
-// //   // TODO: Implement
-// //   let parser = [{ NGRAPH_CHECK(false, "No parser support"); return mlir::failure(); }];
+def DimOp : HirOp<"dim"> {
+  let summary = "dimension index operation";
+  let arguments = (ins AnyRankedTensor:$tensor, APIntAttr:$index);
+  let results = (outs Index);
+}
 
-// //   let verifier = [{ return verifyUnaryArithOp(this); }];
-// }
+def ContractionOp : HirOp<"con"> {
+  let summary = "contraction operation";
+  let arguments = (ins Variadic<AnyRankedTensor>:$operands);
+  let results = (outs AnyRankedTensor);
+}
 
-// def CallOp : ExprOp<"call"> {
-//   let summary = "call operation";
-//   let arguments = (Variadic<AnyType>:$args);
-//   let results = (outs AnyType);
-// }
-
-// def IntConst : Expr<"int"> {
-
-// }
-
-
-
-// def AbsOp : PlaidUnaryOp<"abs">;
-
+def CallOp : HirOp<"call"> {
+  let summary = "call operation";
+}

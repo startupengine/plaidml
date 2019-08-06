@@ -3,20 +3,27 @@
 #pragma once
 
 #include "mlir/IR/OpDefinition.h"
+#include "mlir/IR/StandardTypes.h"
 
 namespace pmlc {
 namespace dialect {
 namespace hir {
 
+using llvm::APInt;
 using mlir::ArrayRef;
+using mlir::Attribute;
 using mlir::Builder;
+using mlir::IndexType;
+using mlir::IntegerAttr;
 using mlir::LogicalResult;
 using mlir::NamedAttribute;
 using mlir::Op;
 using mlir::Operation;
 using mlir::OperationState;
+using mlir::RankedTensorType;
 using mlir::StringRef;
 using mlir::Type;
+using mlir::TypeAttr;
 using mlir::Value;
 
 namespace OpTrait = mlir::OpTrait;
