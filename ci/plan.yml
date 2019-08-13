@@ -229,7 +229,7 @@ SUITES:
             softfail: true
           keras-plaid-mtl-uhd630:
             softfail: true
-        skip_platforms: [keras-plaid-mtl-uhd630, keras-stripe-mtl-uhd630] # whyfail
+        skip_platforms: [keras-plaid-mtl-uhd630] # whyfail
 
   infer:
     platforms:
