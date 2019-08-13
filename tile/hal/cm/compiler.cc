@@ -378,11 +378,10 @@ boost::future<std::unique_ptr<hal::Library>> cmCompiler::Build(const context::Co
 
       CmDevice* pCmDev = device_state_->cmdev();
 
-      auto cmc_path = env::Get("PLAIDML_CM_COMPILER_PATH");
-      // Linux shell example: export PLAIDML_CM_COMPILER_PATH=/home/yangleiz/Desktop/MDF_internal/compiler/bin/cmc
-
       std::string cmd = "";
 
+      auto cmc_path = env::Get("PLAIDML_CM_COMPILER_PATH");
+      // Linux shell example: export PLAIDML_CM_COMPILER_PATH=/home/yangleiz/Desktop/MDF_internal/compiler/bin/cmc
       if (cmc_path.length()) {
         cmd = cmc_path + " ";
       } else {

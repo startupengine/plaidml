@@ -2,6 +2,8 @@
 
 load("//bzl:plaidml.bzl", "plaidml_cc_library", "plaidml_cc_test", "plaidml_proto_library")
 
+load("@cm//:build_defs.bzl", "cm_runtime_lib")
+
 plaidml_proto_library(
     name = "proto",
     srcs = [
@@ -68,7 +70,7 @@ plaidml_cc_library(
   		'-Iexternal/cmheaders',
 	],
 	linkopts=[
-		'-rdynamic /home/yangleiz/Desktop/MDF_internal/runtime/lib/x64/libigfxcmrt.so',
+		'-rdynamic ' + cm_runtime_lib(),
 	],
     visibility = ["//visibility:public"],
     deps = [
