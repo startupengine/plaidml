@@ -31,6 +31,7 @@ _device = plaidml_settings.get('PLAIDML_DEVICE')
 _target = plaidml_settings.get('PLAIDML_TARGET')
 
 
+
 def _prepend_name_scope(name, default):
     if name:
         r = '_'.join(_NAME_SCOPE_STACK + [name])
