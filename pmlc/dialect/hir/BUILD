@@ -32,6 +32,7 @@ plaidml_cc_library(
     ],
     hdrs = [
         "ops.h",
+        "types.h",
         ":gen-op-decls",
     ],
     visibility = ["//visibility:public"],

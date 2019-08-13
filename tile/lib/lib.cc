@@ -1,5 +1,8 @@
 #include "tile/lib/lib.h"
 
+#include <memory>
+#include <tuple>
+
 #include <boost/format.hpp>
 
 #include "base/util/stream_container.h"
@@ -134,31 +137,32 @@ Tensor Convolution(const Tensor& I,                      //
 }
 
 lang::RunInfo LoadMatMul(const std::string& name, const LogicalShape& i1, const LogicalShape& i2) {
-  Tensor A("A", i1);
-  Tensor B("B", i2);
+  auto A = Placeholder(i1, "A");
+  auto B = Placeholder(i2, "B");
   return Evaluate(name, {MatMul(A, B)});
 }
 
 lang::RunInfo LoadMatMulIntermediate(const std::string& name, const LogicalShape& i1, const LogicalShape& i2,
                                      const LogicalShape& i3) {
-  Tensor A("A", i1);
-  Tensor B("B", i2);
-  Tensor C("C", i2);
+  auto A = Placeholder(i1, "A");
+  auto B = Placeholder(i2, "B");
+  auto C = Placeholder(i3, "C");
   Tensor D = MatMul(A, B);
   Tensor E = D + C;
   return Evaluate(name, {D, E});
 }
 
 lang::RunInfo LoadEltwiseMulFlip(const std::string& name, const LogicalShape& i1, const LogicalShape& i2) {
-  Tensor A{"A", i1}, B{"B", i2};
+  auto A = Placeholder(i1, "A");
+  auto B = Placeholder(i2, "B");
   return Evaluate(name, {~(A * B)});
 }
 
 lang::RunInfo LoadMatMulAmongEltwise(const std::string& name, const LogicalShape& i1, const LogicalShape& i2,
                                      const LogicalShape& i3) {
-  Tensor A("A", i1);
-  Tensor B("B", i2);
-  Tensor C("C", i3);
+  auto A = Placeholder(i1, "A");
+  auto B = Placeholder(i2, "B");
+  auto C = Placeholder(i3, "C");
   Tensor NegA = -A;
   Tensor NegB = -B;
   Tensor P = MatMul(NegA, NegB);
@@ -166,67 +170,67 @@ lang::RunInfo LoadMatMulAmongEltwise(const std::string& name, const LogicalShape
 }
 
 lang::RunInfo LoadEltwiseAdd(const std::string& name, const LogicalShape& i1, const LogicalShape& i2) {
-  Tensor A("A", i1);
-  Tensor B("B", i2);
+  auto A = Placeholder(i1, "A");
+  auto B = Placeholder(i2, "B");
   return Evaluate(name, {A + B});
 }
 
 lang::RunInfo LoadEltwiseMultiAdd(const std::string& name, const LogicalShape& i1, const LogicalShape& i2,
                                   const LogicalShape& i3, const LogicalShape& i4) {
-  Tensor A("A", i1);
-  Tensor B("B", i2);
-  Tensor C("C", i3);
-  Tensor D("D", i4);
+  auto A = Placeholder(i1, "A");
+  auto B = Placeholder(i2, "B");
+  auto C = Placeholder(i3, "C");
+  auto D = Placeholder(i4, "D");
   return Evaluate(name, {A + B + C + D});
 }
 
 lang::RunInfo LoadEltwiseDiv(const std::string& name, const LogicalShape& i1, const LogicalShape& i2) {
-  Tensor A("A", i1);
-  Tensor B("B", i2);
+  auto A = Placeholder(i1, "A");
+  auto B = Placeholder(i2, "B");
   return Evaluate(name, {A / B});
 }
 
 lang::RunInfo LoadConstScalarMul(const std::string& name, const double s, const LogicalShape& i1) {
   Tensor scalar(s);
-  Tensor A("A", i1);
+  auto A = Placeholder(i1, "A");
   return Evaluate(name, {scalar * A});
 }
 
 lang::RunInfo LoadEltwiseMul(const std::string& name, const LogicalShape& i1, const LogicalShape& i2) {
-  Tensor A("A", i1);
-  Tensor B("B", i2);
+  auto A = Placeholder(i1, "A");
+  auto B = Placeholder(i2, "B");
   return Evaluate(name, {A * B});
 }
 
 lang::RunInfo LoadEltwiseMultiMul(const std::string& name, const LogicalShape& i1, const LogicalShape& i2,
                                   const LogicalShape& i3, const LogicalShape& i4) {
-  Tensor A("A", i1);
-  Tensor B("B", i2);
-  Tensor C("C", i3);
-  Tensor D("D", i4);
+  auto A = Placeholder(i1, "A");
+  auto B = Placeholder(i2, "B");
+  auto C = Placeholder(i3, "C");
+  auto D = Placeholder(i4, "D");
   return Evaluate(name, {A * B * C * D});
 }
 
 lang::RunInfo LoadSin(const std::string& name, const LogicalShape& i1) {
-  Tensor A("A", i1);
+  auto A = Placeholder(i1, "A");
   return Evaluate(name, {Sin(A)});
 }
 
 lang::RunInfo LoadTanh(const std::string& name, const LogicalShape& i1) {
-  Tensor A("A", i1);
+  auto A = Placeholder(i1, "A");
   return Evaluate(name, {Tanh(A)});
 }
 
 lang::RunInfo LoadMulThenNeg(const std::string& name, const LogicalShape& i1, const LogicalShape& i2) {
-  Tensor A("A", i1);
-  Tensor B("B", i2);
+  auto A = Placeholder(i1, "A");
+  auto B = Placeholder(i2, "B");
   Tensor C = A * B;
   return Evaluate(name, {-C});
 }
 
 lang::RunInfo LoadNegThenMul(const std::string& name, const LogicalShape& i1, const LogicalShape& i2) {
-  Tensor A("A", i1);
-  Tensor B("B", i2);
+  auto A = Placeholder(i1, "A");
+  auto B = Placeholder(i2, "B");
   Tensor NegA = -A;
   Tensor NegB = -B;
   return Evaluate(name, {NegA * NegB});
@@ -250,8 +254,8 @@ lang::RunInfo LoadConv1d(const std::string& name,     //
                          const LogicalShape& input,   //
                          const LogicalShape& kernel,  //
                          const std::vector<int64_t>& output) {
-  Tensor I("I", input);
-  Tensor K("K", kernel);
+  auto I = Placeholder(input, "I");
+  auto K = Placeholder(kernel, "K");
   auto runinfo = Evaluate(name, {Convolution(I, K, output)});
   runinfo.const_inputs = {"K"};
   runinfo.input_buffers = {{"K", MakeBuffer(kernel)}};
@@ -262,8 +266,8 @@ lang::RunInfo LoadConv2d(const std::string& name,     //
                          const LogicalShape& input,   //
                          const LogicalShape& kernel,  //
                          const std::vector<int64_t>& output) {
-  Tensor I("I", input);
-  Tensor K("K", kernel);
+  auto I = Placeholder(input, "I");
+  auto K = Placeholder(kernel, "K");
   auto runinfo = Evaluate(name, {Convolution(I, K, output)});
   runinfo.const_inputs = {"K"};
   runinfo.input_buffers = {{"K", MakeBuffer(kernel)}};
@@ -274,8 +278,8 @@ lang::RunInfo LoadConv2dRelu(const std::string& name,     //
                              const LogicalShape& input,   //
                              const LogicalShape& kernel,  //
                              const std::vector<int64_t>& output) {
-  Tensor I("I", input);
-  Tensor K("K", kernel);
+  auto I = Placeholder(input, "I");
+  auto K = Placeholder(kernel, "K");
   auto runinfo = Evaluate(name, {Relu(Convolution(I, K, output))});
   runinfo.const_inputs = {"K"};
   runinfo.input_buffers = {{"K", MakeBuffer(kernel)}};
@@ -287,10 +291,10 @@ lang::RunInfo LoadConv2dBnRelu(const std::string& name,       //
                                const LogicalShape& kernel,    //
                                const LogicalShape& channels,  //
                                const std::vector<int64_t>& output) {
-  Tensor I("I", input);
-  Tensor K("K", kernel);
-  Tensor B("B", channels);
-  Tensor S("S", channels);
+  auto I = Placeholder(input, "I");
+  auto K = Placeholder(kernel, "K");
+  auto B = Placeholder(channels, "B");
+  auto S = Placeholder(channels, "S");
   auto O = Convolution(I, K, output);
   auto R = Relu((O + B) * S);
   auto runinfo = Evaluate(name, {R});
@@ -308,10 +312,10 @@ lang::RunInfo LoadConv2d3Deep(const std::string& name,      //
                               const LogicalShape& kernel1,  //
                               const LogicalShape& kernel2,  //
                               const LogicalShape& kernel3) {
-  Tensor I("I", input);
-  Tensor K1("K1", input);
-  Tensor K2("K2", input);
-  Tensor K3("K3", input);
+  auto I = Placeholder(input, "I");
+  auto K1 = Placeholder(kernel1, "K1");
+  auto K2 = Placeholder(kernel2, "K2");
+  auto K3 = Placeholder(kernel3, "K3");
   auto dims = input.int_dims();
   auto O1 = Convolution(I, K1, {dims[0], dims[1], dims[2], kernel1.int_dims()[3]});
   auto O2 = Convolution(O1, K2, {dims[0], dims[1], dims[2], kernel2.int_dims()[3]});
@@ -329,8 +333,8 @@ lang::RunInfo LoadConv2d3Deep(const std::string& name,      //
 lang::RunInfo LoadDilatedConv2d(const std::string& name,    //
                                 const LogicalShape& input,  //
                                 const LogicalShape& kernel) {
-  Tensor I(input);
-  Tensor K(kernel);
+  auto I = Placeholder(input, "I");
+  auto K = Placeholder(kernel, "K");
   return Evaluate(name, {DilatedConvolution2(I, K)});
 }
 
@@ -365,10 +369,10 @@ lang::RunInfo LoadLarsMomentum4d(const std::string& name,      //
   double lars_coeff = 1. / 1024.;
   double lars_weight_decay = 1. / 2048.;
   double momentum = 1. / 8.;
-  Tensor X(x_shape);
-  Tensor Grad(x_shape);
-  Tensor Veloc(x_shape);
-  Tensor LR(lr_shape);
+  auto X = Placeholder(x_shape);
+  auto Grad = Placeholder(x_shape);
+  auto Veloc = Placeholder(x_shape);
+  auto LR = Placeholder(lr_shape);
   auto R = LarsMomentum(X, Grad, Veloc, LR, lars_coeff, lars_weight_decay, momentum);
   return Evaluate("lars_momentum4d", {std::get<0>(R), std::get<1>(R)});
 }
@@ -376,8 +380,8 @@ lang::RunInfo LoadLarsMomentum4d(const std::string& name,      //
 lang::RunInfo LoadPow(const std::string& name,  //
                       const LogicalShape& i1,   //
                       const LogicalShape& i2) {
-  Tensor X("X", i1);
-  Tensor Y("Y", i2);
+  auto X = Placeholder(i1, "X");
+  auto Y = Placeholder(i2, "Y");
   auto runinfo = Evaluate(name, {pow(X, Y)});
   runinfo.input_buffers = {
       {"X", MakeBuffer(i1)},
@@ -405,10 +409,10 @@ Tensor Norm4dAx2(const Tensor& I, const Tensor& G, const Tensor& B, const Tensor
 lang::RunInfo LoadLayerNorm4dAx2(const std::string& name,  //
                                  const LogicalShape& input) {
   // Note: I/G/B/O should all have the same shape, so pass in one shape to share
-  Tensor I(input);
-  Tensor G(input);
-  Tensor B(input);
-  Tensor Epsilon(LogicalShape(PLAIDML_DATA_FLOAT32, {}));
+  auto I = Placeholder(input);
+  auto G = Placeholder(input);
+  auto B = Placeholder(input);
+  auto Epsilon = Placeholder(PLAIDML_DATA_FLOAT32, {});
   return Evaluate(name, {Norm4dAx2(I, G, B, Epsilon)});
 }
 
@@ -430,13 +434,13 @@ Tensor PolygonBoxTransform(const Tensor& I) {
 lang::RunInfo LoadPolygonBoxTransform(const std::string& name,  //
                                       const LogicalShape& input) {
   // Note: I and O have the same shape
-  Tensor I(input);
+  auto I = Placeholder(input);
   return Evaluate(name, {PolygonBoxTransform(I)});
 }
 
 lang::RunInfo LoadSoftmax(const std::string& name,      //
                           const LogicalShape& input) {  //
-  Tensor X1(input);
+  auto X1 = Placeholder(input);
   TensorDim I, J;
   X1.bind_dims(I, J);
   TensorIndex i("i"), j("j");

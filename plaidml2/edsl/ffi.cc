@@ -74,6 +74,25 @@ CombinationOp into_combo_op(plaidml_combo_op op) {
   throw std::runtime_error("Invalid combo_op");
 }
 
+class GlobalContext {
+ public:
+  static GlobalContext* get() {
+    static thread_local GlobalContext context;
+    return &context;
+  }
+
+  static OpBuilder* get_builder() { return &get()->builder; }
+
+ private:
+  MLIRContext context;
+  ModuleOp module;
+  OpBuilder builder;
+
+  GlobalContext()
+      : module(ModuleOp::create(UnknownLoc::get(&context))),  //
+        builder(module.getBody()) {}
+};
+
 }  // namespace
 
 extern "C" {
@@ -84,10 +103,12 @@ struct plaidml_logical_shape {
 
 struct plaidml_dim_expr {
   DimExprPtr expr;
+  mlir::Value* value;
 };
 
 struct plaidml_poly_expr {
   PolyExprPtr expr;
+  mlir::Value* value;
 };
 
 void plaidml_edsl_init(  //
@@ -226,7 +247,31 @@ void plaidml_expr_bind_dims(  //
     expr->expr->shape.bind_dims(&vec_dims);
     for (size_t i = 0; i < ndims; i++) {
       dims[i]->expr = vec_dims[i];
+      // dims[i]->value = vec_dims[i]->value;
     }
+    // auto type = expr->value->getType();
+
+    // if (dims.size() != into->size()) {
+    //   throw std::runtime_error(
+    //       boost::str(boost::format("bind_dims() mismatch. Tensor shape: %1%, dims: %2%") % dims.size() %
+    //       into->size()));
+    // }
+    // for (size_t i = 0; i < dims.size(); i++) {
+    //   auto none_expr = std::dynamic_pointer_cast<DimNoneExpr>(into->at(i));
+    //   if (none_expr) {
+    //     (*into)[i] = dims[i].expr;
+    //   } else {
+    //     auto lhs_int = std::dynamic_pointer_cast<DimIntExpr>(into->at(i));
+    //     auto rhs_int = std::dynamic_pointer_cast<DimIntExpr>(dims[i].expr);
+    //     if (lhs_int && rhs_int) {
+    //       if (lhs_int->value != rhs_int->value) {
+    //         throw std::runtime_error(
+    //             boost::str(boost::format("bind_dims() mismatch on dim %1%. Required: %2%, Actual: %3%") % i %
+    //                        rhs_int->value % lhs_int->value));
+    //       }
+    //     }
+    //   }
+    // }
   });
 }
 
@@ -245,25 +290,6 @@ plaidml_expr* plaidml_expr_dim(  //
     return new plaidml_expr{std::make_shared<DimExprExpr>(expr->expr)};
   });
 }
-
-class GlobalContext {
- public:
-  static GlobalContext* get() {
-    static thread_local GlobalContext context;
-    return &context;
-  }
-
-  static OpBuilder* get_builder() { return &get()->builder; }
-
- private:
-  MLIRContext context;
-  ModuleOp module;
-  OpBuilder builder;
-
-  GlobalContext()
-      : module(ModuleOp::create(UnknownLoc::get(&context))),  //
-        builder(module.getBody()) {}
-};
 
 plaidml_expr* plaidml_expr_param(  //
     plaidml_error* err,            //
@@ -289,8 +315,8 @@ plaidml_expr* plaidml_expr_param(  //
     auto builder = GlobalContext::get_builder();
     auto elt_type = builder->getType<ScalarType>(shape->shape.dtype);
     auto shape = RankedTensorType::get(dims, elt_type);
-    auto op = builder->create<PlaceholderOp>(builder->getUnknownLoc(), shape);
-    return new plaidml_expr{expr, op.getOperation()};
+    auto op = builder->create<PlaceholderOp>(builder->getUnknownLoc(), shape).getOperation();
+    return new plaidml_expr{expr, op->getResult(0)};
   });
 }
 
@@ -466,6 +492,7 @@ plaidml_expr* plaidml_expr_call(  //
   });
 }
 
+// AffineMapOp
 plaidml_expr* plaidml_expr_tensor_spec(  //
     plaidml_error* err,                  //
     plaidml_expr* ref,                   //
@@ -474,20 +501,33 @@ plaidml_expr* plaidml_expr_tensor_spec(  //
     plaidml_dim_expr** output_dims) {
   return ffi_wrap<plaidml_expr*>(err, nullptr, [&] {
     std::vector<DimExprPtr> vec_dims;
+    std::vector<mlir::Value*> dim_values;
     std::vector<std::shared_ptr<PolyExpr>> vec_idxs(ndims);
+    std::vector<mlir::Value*> idx_values(ndims);
     for (size_t i = 0; i < ndims; i++) {
       vec_idxs[i] = input_idxs[i]->expr;
+      idx_values[i] = input_idxs[i]->value;
       if (output_dims) {
         if (!output_dims[i]) {
           throw std::runtime_error("Undefined output_dim in TensorSpec");
         }
         vec_dims.emplace_back(output_dims[i]->expr);
+        dim_values.emplace_back(output_dims[i]->value);
+        IVLOG(1, "output dim: " << output_dims[i]->value);
       }
     }
+    auto builder = GlobalContext::get_builder();
     if (ref) {
-      return new plaidml_expr{std::make_shared<TensorSpecExpr>(ref->expr, vec_idxs)};
+      IVLOG(1, "Build input");
+      auto op = builder->create<AffineSourceMapOp>(builder->getUnknownLoc(), ref->value, idx_values).getOperation();
+      IVLOG(1, "Build input done");
+      return new plaidml_expr{std::make_shared<TensorSpecExpr>(ref->expr, vec_idxs), op->getResult(0)};
+    } else {
+      IVLOG(1, "Build output: " << dim_values.size());
+      auto op = builder->create<AffineSinkMapOp>(builder->getUnknownLoc(), idx_values, dim_values).getOperation();
+      IVLOG(1, "Build output done");
+      return new plaidml_expr{std::make_shared<TensorSpecExpr>(vec_idxs, vec_dims), op->getResult(0)};
     }
-    return new plaidml_expr{std::make_shared<TensorSpecExpr>(vec_idxs, vec_dims)};
   });
 }
 
@@ -629,23 +669,27 @@ PLAIDML_EDSL_API plaidml_poly_expr* plaidml_poly_expr_dim(  //
     plaidml_error* err,                                     //
     plaidml_dim_expr* expr) {
   return ffi_wrap<plaidml_poly_expr*>(err, nullptr, [&] {  //
-    return new plaidml_poly_expr{std::make_shared<PolyDimExpr>(expr->expr)};
+    return new plaidml_poly_expr{std::make_shared<PolyDimExpr>(expr->expr), expr->value};
   });
 }
 
 plaidml_poly_expr* plaidml_poly_expr_index(  //
     plaidml_error* err,                      //
     const char* name) {
-  return ffi_wrap<plaidml_poly_expr*>(err, nullptr, [&] {  //
-    return new plaidml_poly_expr{std::make_shared<PolyIndex>(next_idx_id++, std::string{name})};
+  return ffi_wrap<plaidml_poly_expr*>(err, nullptr, [&] {
+    auto builder = GlobalContext::get_builder();
+    auto op = builder->create<AffineIndexOp>(builder->getUnknownLoc()).getOperation();
+    return new plaidml_poly_expr{std::make_shared<PolyIndex>(next_idx_id++, std::string{name}), op->getResult(0)};
   });
 }
 
 plaidml_poly_expr* plaidml_poly_expr_literal(  //
     plaidml_error* err,                        //
     int64_t value) {
-  return ffi_wrap<plaidml_poly_expr*>(err, nullptr, [&] {  //
-    return new plaidml_poly_expr{std::make_shared<PolyLiteral>(value)};
+  return ffi_wrap<plaidml_poly_expr*>(err, nullptr, [&] {
+    auto builder = GlobalContext::get_builder();
+    auto op = builder->create<AffineConstantOp>(builder->getUnknownLoc(), value).getOperation();
+    return new plaidml_poly_expr{std::make_shared<PolyLiteral>(value), op->getResult(0)};
   });
 }
 
@@ -694,7 +738,7 @@ plaidml_dim_expr* plaidml_dim_expr_none(  //
     plaidml_error* err                    //
 ) {
   return ffi_wrap<plaidml_dim_expr*>(err, nullptr, [&] {  //
-    return new plaidml_dim_expr{std::make_shared<DimNoneExpr>()};
+    return new plaidml_dim_expr{std::make_shared<DimNoneExpr>(), nullptr};
   });
 }
 
@@ -703,15 +747,17 @@ plaidml_dim_expr* plaidml_dim_expr_ref(  //
     plaidml_expr* ref,                   //
     size_t dim) {
   return ffi_wrap<plaidml_dim_expr*>(err, nullptr, [&] {  //
-    return new plaidml_dim_expr{std::make_shared<DimRefExpr>(ref->expr, dim)};
+    return new plaidml_dim_expr{std::make_shared<DimRefExpr>(ref->expr, dim), ref->value};
   });
 }
 
 plaidml_dim_expr* plaidml_dim_expr_int(  //
     plaidml_error* err,                  //
     int64_t value) {
-  return ffi_wrap<plaidml_dim_expr*>(err, nullptr, [&] {  //
-    return new plaidml_dim_expr{std::make_shared<DimIntExpr>(value)};
+  return ffi_wrap<plaidml_dim_expr*>(err, nullptr, [&] {
+    auto builder = GlobalContext::get_builder();
+    auto op = builder->create<AffineConstantOp>(builder->getUnknownLoc(), value).getOperation();
+    return new plaidml_dim_expr{std::make_shared<DimIntExpr>(value), op->getResult(0)};
   });
 }
 

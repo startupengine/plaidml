@@ -5,6 +5,8 @@
 #include "mlir/IR/OpDefinition.h"
 #include "mlir/IR/StandardTypes.h"
 
+#include "pmlc/dialect/hir/types.h"
+
 namespace pmlc {
 namespace dialect {
 namespace hir {
@@ -20,7 +22,9 @@ using mlir::NamedAttribute;
 using mlir::Op;
 using mlir::Operation;
 using mlir::OperationState;
+using mlir::OpFoldResult;
 using mlir::RankedTensorType;
+using mlir::Region;
 using mlir::StringRef;
 using mlir::Type;
 using mlir::TypeAttr;

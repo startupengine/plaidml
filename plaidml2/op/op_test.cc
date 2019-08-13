@@ -34,8 +34,8 @@ class Environment : public ::testing::Environment {
 }();
 
 TEST(Op, Convolution) {
-  Tensor I("I", LogicalShape(PLAIDML_DATA_FLOAT32, {1, 224, 224, 3}, NCX));
-  Tensor K("K", LogicalShape(PLAIDML_DATA_FLOAT32, {7, 7, 3, 64}, XCK));
+  auto I = Placeholder(PLAIDML_DATA_FLOAT32, {1, 224, 224, 3}, "I");
+  auto K = Placeholder(PLAIDML_DATA_FLOAT32, {7, 7, 3, 64}, "K");
   auto conv = op::convolution(I, K, {2, 2}, {1, 1}, {1, 1}, {}, 1, "explicit", {3, 3}, "nxc", "xck", "none", false, "",
                               "ungrouped", "none", {});
   Program program("convolution", {conv});
@@ -52,7 +52,7 @@ TEST(Op, Convolution) {
 }
 
 TEST(Op, Mean) {
-  Tensor A("A", LogicalShape(PLAIDML_DATA_FLOAT32, {10, 20}));
+  auto A = Placeholder(PLAIDML_DATA_FLOAT32, {10, 20}, "A");
   Program program("mean", {op::mean(A)});
   IVLOG(1, program);
   EXPECT_THAT(program, Eq(R"(function (
@@ -68,7 +68,7 @@ TEST(Op, Mean) {
 }
 
 TEST(Op, Square) {
-  Tensor A("A", LogicalShape(PLAIDML_DATA_FLOAT32, {10}));
+  auto A = Placeholder(PLAIDML_DATA_FLOAT32, {10}, "A");
   Program program("square", {op::square(A)});
   IVLOG(1, program);
   EXPECT_THAT(program, Eq(R"(function (
@@ -82,7 +82,7 @@ TEST(Op, Square) {
 }
 
 TEST(Op, Sum) {
-  Tensor A("A", LogicalShape(PLAIDML_DATA_FLOAT32, {10, 20}));
+  auto A = Placeholder(PLAIDML_DATA_FLOAT32, {10, 20}, "A");
   Program program("sum", {op::sum(A)});
   IVLOG(1, program);
   EXPECT_THAT(program, Eq(R"(function (

@@ -2,6 +2,7 @@
 
 #include "pmlc/dialect/hir/ops.h"
 
+#include "mlir/IR/Builders.h"
 #include "mlir/IR/OpImplementation.h"
 
 namespace pmlc {

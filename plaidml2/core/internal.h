@@ -5,7 +5,7 @@
 #include <memory>
 #include <string>
 
-#include "mlir/IR/Operation.h"
+#include "mlir/IR/Value.h"
 
 #include "plaidml2/core/ffi.h"
 #include "tile/base/platform.h"
@@ -24,7 +24,7 @@ struct plaidml_shape {
 
 struct plaidml_expr {
   vertexai::tile::lang::ast::ExprPtr expr;
-  mlir::Operation* op;
+  mlir::Value* value;
 };
 
 struct plaidml_program {

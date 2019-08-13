@@ -208,10 +208,10 @@ struct ContractionExpr : Expr {
 
 struct PolyVisitor {
   virtual ~PolyVisitor() = default;
-  virtual Polynomial Visit(const PolyDimExpr&) = 0;
-  virtual Polynomial Visit(const PolyIndex&) = 0;
-  virtual Polynomial Visit(const PolyLiteral&) = 0;
-  virtual Polynomial Visit(const PolyOpExpr&) = 0;
+  virtual Polynomial Visit(const PolyDimExpr&) = 0;  // DimOp
+  virtual Polynomial Visit(const PolyIndex&) = 0;    // AffineIndexOp
+  virtual Polynomial Visit(const PolyLiteral&) = 0;  // AffineConstantOp
+  virtual Polynomial Visit(const PolyOpExpr&) = 0;   // scalar ops
 };
 
 struct PolyExpr {

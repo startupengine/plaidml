@@ -10,13 +10,11 @@ namespace hir {
 class Dialect : public mlir::Dialect {
  public:
   explicit Dialect(mlir::MLIRContext* ctx) : mlir::Dialect("pml_hir", ctx) {
-    // addTypes<TensorType>();
-    // addTypes<AffineType>();
-    //   addOperations<
-    // #define GET_OP_LIST
-    // #include "tile/plaid_ast/ast.cpp.inc"
-    //       >();
-    // printf("Got to AstDialect::AstDialect\n");
+    addTypes<IndexedTensorType>();
+    addOperations<
+#define GET_OP_LIST
+#include "pmlc/dialect/hir/ops.cpp.inc"
+        >();
   }
 };
 

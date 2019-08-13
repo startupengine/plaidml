@@ -54,7 +54,7 @@ TEST(Scalar, Basic) {
     edsc::ScopedContext scope(builder, loc);
     auto x1 = func.getArgument(0);
     // auto x1 = builder.create<ScalarConstantOp>(loc, f32, builder.getFloatAttr(std_f32, 1.5f));
-    auto x2 = builder.create<ScalarConstantOp>(loc, 1);
+    auto x2 = builder.create<ScalarConstantOp>(loc, f32, 1);
     auto x3 = builder.create<AddOp>(loc, f32, x1, x1);
     auto x4 = builder.create<MulOp>(loc, f32, x3, x2);
     builder.create<ReturnOp>(loc, x4.getResult());

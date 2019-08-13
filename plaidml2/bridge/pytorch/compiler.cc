@@ -2,6 +2,8 @@
 
 #include "plaidml2/bridge/pytorch/compiler.h"
 
+#include <map>
+
 #include "plaidml2/bridge/pytorch/logging.h"
 #include "plaidml2/op/op.h"
 
@@ -532,8 +534,7 @@ std::shared_ptr<Executable> Compiler::compile(at::ArrayRef<IValue>* inputs) {
       sizes.emplace_back(size);
     }
     // TODO: convert dtype
-    edsl::LogicalShape shape(PLAIDML_DATA_FLOAT32, sizes);
-    edsl::Tensor input_tensor(shape);
+    auto input_tensor = edsl::Placeholder(PLAIDML_DATA_FLOAT32, sizes);
     input_tensors.push_back(input_tensor);
     const auto& input = subgraph_->inputs()[i];
     value_map.emplace(input, input_tensor);

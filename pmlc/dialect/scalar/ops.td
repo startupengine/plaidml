@@ -15,19 +15,20 @@ def ScalarConstantOp :
   let results = (outs ScalarType:$result);
 
   let builders = [OpBuilder<
-    "Builder* builder, OperationState* result, double value", [{
-      auto type = builder->getF32Type();
+    "Builder* builder, OperationState* result, ScalarType type, double value", [{
+      result->addAttribute("value", builder->getF32FloatAttr(value));
       result->addTypes(type);
-      auto attr = builder->getFloatAttr(type, value);
-      result->addAttribute("value", attr);
-  }]>, OpBuilder<
+    }]
+  >, OpBuilder<
     "Builder* builder, OperationState* result, ScalarType type, Attribute value", [{
       result->addAttribute("value", value);
       result->addTypes(type);
-  }]>, OpBuilder<
+    }]
+  >, OpBuilder<
     "Builder* builder, OperationState* result, ScalarType type, ArrayRef<Value*> operands", [{
       llvm_unreachable("unhandled transcoding");
-  }]>];
+    }]
+  >];
 
   let extraClassDeclaration = [{
     Attribute getValue() { return getAttr("value"); }
@@ -45,10 +46,12 @@ class UnaryOp<string mnemonic, list<OpTrait> traits = []> :
       result->addOperands(operands);
       result->addAttribute("type", TypeAttr::get(type));
       result->addTypes(type);
-  }]>, OpBuilder<
+    }]
+  >, OpBuilder<
     "Builder* builder, OperationState* result, ScalarType type, Value* operand", [{
       build(builder, result, type, llvm::SmallVector<Value*, 1>({operand}));
-  }]>];
+    }]
+  >];
 
   let extraClassDeclaration = [{
     static constexpr int operands() { return 1; }
@@ -65,10 +68,12 @@ class BinaryOp<string mnemonic, list<OpTrait> traits = []> :
       result->addOperands(operands);
       result->addAttribute("type", TypeAttr::get(type));
       result->addTypes(type);
-  }]>, OpBuilder<
+    }]
+  >, OpBuilder<
     "Builder* builder, OperationState* result, ScalarType type, Value* lhs, Value* rhs", [{
       build(builder, result, type, {lhs, rhs});
-  }]>];
+    }]
+  >];
 
   let extraClassDeclaration = [{
     static constexpr int operands() { return 2; }
@@ -85,10 +90,12 @@ class CompareOp<string mnemonic, list<OpTrait> traits = []> :
       result->addOperands(operands);
       result->addAttribute("type", TypeAttr::get(type));
       result->addTypes(ScalarType::get(result->getContext(), DataType::BOOLEAN));
-  }]>, OpBuilder<
+    }]
+  >, OpBuilder<
     "Builder* builder, OperationState* result, ScalarType type, Value* lhs, Value* rhs", [{
       build(builder, result, type, {lhs, rhs});
-  }]>];
+    }]
+  >];
 
   let extraClassDeclaration = [{
     static constexpr int operands() { return 2; }
