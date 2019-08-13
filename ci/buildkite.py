@@ -83,20 +83,22 @@ def cmd_pipeline(args, remainder):
                     for shard in popt.get('run_shards'):
                         rsh = shard
                         shard = 'shard'
-                        tests.append(
-                            dict(suite=skey,
-                                 workload=wkey,
-                                 platform=pkey,
-                                 variant=variant,
-                                 timeout=popt.get('timeout', 20),
-                                 retry=popt.get('retry'),
-                                 softfail=popt.get('softfail'),
-                                 python=get_python(variant),
-                                 shard=shard,
-                                 shardcount=shc,
-                                 rsh=rsh,
-                                 emoji=get_emoji(variant),
-                                 engine=get_engine(pkey)))
+                        for batch_size in suite['params'][args.pipeline]['batch_sizes']:
+                            tests.append(
+                                dict(suite=skey,
+                                     workload=wkey,
+                                     platform=pkey,
+                                     batch_size=batch_size,
+                                     variant=variant,
+                                     timeout=popt.get('timeout', 20),
+                                     retry=popt.get('retry'),
+                                     softfail=popt.get('softfail'),
+                                     python=get_python(variant),
+                                     shard=shard,
+                                     shardcount=shc,
+                                     rsh=rsh,
+                                     emoji=get_emoji(variant),
+                                     engine=get_engine(pkey)))
 
                 else:
                     shard = None
