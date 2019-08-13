@@ -14,7 +14,7 @@
 
 // Copyright 2017-2018 Intel Corporation.
 
-#include "tile/hal/cm/cm_compiler.h"
+#include "tile/hal/cm/compiler.h"
 
 namespace vertexai {
 namespace tile {

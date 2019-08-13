@@ -3,7 +3,7 @@
 #include "base/util/compat.h"
 #include "base/util/env.h"
 #include "base/util/factory.h"
-#include "tile/hal/cm/cm_driver.h"
+#include "tile/hal/cm/driver.h"
 
 namespace vertexai {
 namespace tile {
