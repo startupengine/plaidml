@@ -19,7 +19,12 @@ def buildkite_metadata(key, default=None):
     return os.getenv('BUILDKITE_AGENT_META_DATA_' + key, os.getenv(key, default))
 
 
-def run(args):
+def run(args, shargs):
+
+    if shargs:
+        print('running shard: ', shargs[3])
+        shard_num = shargs[3]
+
     root = pathlib.Path('.').resolve() / 'tmp'
     input = root / 'input'
     output_root = root / 'output'
@@ -154,7 +159,11 @@ def run(args):
         'ref.execution_duration': result.ref.execution_duration,
     }
 
-    with (output / 'report.json').open('w') as fp:
+    report_fn = 'report.json'
+    if shargs:
+        report_fn = 'report' + shard_num + '.json'
+
+    with (output / report_fn).open('w') as fp:
         util.printf('Writing:', fp.name)
         json.dump(report, fp)
 

@@ -203,7 +203,7 @@ def cmd_build(args, remainder):
 
 def cmd_test(args, remainder):
     import harness
-    harness.run(args)
+    harness.run(args, remainder)
 
 
 def make_tarfile(output_filename, source_dir):
