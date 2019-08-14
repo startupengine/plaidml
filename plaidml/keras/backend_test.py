@@ -38,6 +38,14 @@ theano.config.optimizer = "None"
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--fp16', action='store_true')
+    parser.add_argument(
+        '--shard-count',
+        type=int,
+        default=0,
+        help=
+        'Run sharded test split into this many shards. Does not forward additional arguments to unittest. 0 (default) to not shard.'
+    )
+    parser.add_argument('--shard', type=int, default=0, help='Which shard to run')
     parser.add_argument('-v', '--verbose', action='count', default=0)
     args, remainder = parser.parse_known_args()
 
@@ -723,6 +731,10 @@ class TestBackendOps(unittest.TestCase):
             b.relu(x, alpha=a, max_value=m, threshold=threshold),
         ]
 
+    @opTest([[m(3, 6)]])
+    def testHardSigmoid(self, b, x):
+        return [b.hard_sigmoid(x)]
+
     @compareForwardExact()
     def testEqual(self, b):
         return b.equal(b.variable(m(3, 3)), b.variable(m(3, 3)))
@@ -736,16 +748,32 @@ class TestBackendOps(unittest.TestCase):
         return b.less(b.variable(2 * m(3, 3)), b.variable(m(3, 3)))
 
     @compareForwardExact()
+    def testLessVersusNumeric(self, b):
+        return b.less(b.variable(2 * m(3, 3)), m(3, 3))
+
+    @compareForwardExact()
     def testLessEqual(self, b):
         return b.less_equal(b.variable(2 * m(3, 3)), b.variable(m(3, 3)))
+
+    @compareForwardExact()
+    def testLessEqualVersusNumeric(self, b):
+        return b.less_equal(b.variable(2 * m(3, 3)), m(3, 3))
 
     @compareForwardExact()
     def testGreater(self, b):
         return b.greater(b.variable(2 * m(3, 3)), b.variable(m(3, 3)))
 
     @compareForwardExact()
+    def testGreaterVersusNumeric(self, b):
+        return b.greater(b.variable(2 * m(3, 3)), m(3, 3))
+
+    @compareForwardExact()
     def testGreaterEqual(self, b):
         return b.greater_equal(b.variable(2 * m(3, 3)), b.variable(m(3, 3)))
+
+    @compareForwardExact()
+    def testGreaterEqualVersusNumeric(self, b):
+        return b.greater_equal(b.variable(2 * m(3, 3)), m(3, 3))
 
     @opTest([[m(3, 3) - 0.0001]])
     def testAbs(self, b, x):
@@ -892,6 +920,30 @@ class TestBackendOps(unittest.TestCase):
     @opTest([[m(10)], [m(2, 2, 2, 3)]], 1e-2, 1e-7)
     def testTanh(self, b, x):
         return [b.tanh(x)]
+
+    @compareForwardClose(.1)
+    def testRandomUniformMean(self, b):
+        rand = b.random_uniform((1000, 1000))
+        return b.mean(rand)
+
+    @compareForwardClose(.1)
+    def testRandomUniformDev(self, b):
+        rand = b.random_uniform((1000, 1000))
+        mean = b.mean(rand)
+        diffs = rand - mean
+        return b.mean(b.square(diffs))
+
+    @compareForwardClose(.1)
+    def testRandomUniformVariableMean(self, b):
+        rand = b.random_uniform_variable((1000, 1000), low=0.0, high=1.0)
+        return b.mean(rand)
+
+    @compareForwardClose(.1)
+    def testRandomUniformVariableDev(self, b):
+        rand = b.random_uniform_variable((1000, 1000), low=0.0, high=1.0)
+        mean = b.mean(rand)
+        diffs = rand - mean
+        return b.mean(b.square(diffs))
 
     @compareForwardClose(.1)
     def testRandomNormalMean(self, b):
@@ -1595,6 +1647,12 @@ class TestBackendOps(unittest.TestCase):
         vals = np.array([[1.7, 0.8, 1.5], [0.9, -0.3, -0.8], [0, 1.7, 0.6]])
         return b.round(b.variable(vals))
 
+    def testCeil(self):
+        npt.assert_allclose(pkb.ceil(pkb.variable(m(6, 2, 3))).eval(), np.ceil(m(6, 2, 3)))
+
+    def testFloor(self):
+        npt.assert_allclose(pkb.floor(pkb.variable(m(6, 2, 3))).eval(), np.floor(m(6, 2, 3)))
+
     @opTest([
         [m(3, 2, 4), n(3, 2, 4), 0],
         [m(2, 3), n(2, 3), 1],
@@ -1746,5 +1804,15 @@ class TestBackendOps(unittest.TestCase):
 
 if __name__ == '__main__':
     np.set_printoptions(threshold=np.inf)
-    #plaidml._internal_set_vlog(1)
-    unittest.main(argv=sys.argv[:1] + remainder, verbosity=args.verbose + 1)
+    if args.shard_count:
+        print('Running shard {} of {}'.format(args.shard, args.shard_count))
+        loader = unittest.TestLoader()
+        suite = unittest.TestSuite()
+        for n, test in enumerate(loader.loadTestsFromTestCase(TestBackendOps)):
+            if n % args.shard_count == args.shard:
+                print("n: {}, test: {}".format(n, test))
+                suite.addTest(test)
+        runner = unittest.TextTestRunner()
+        runner.run(suite)
+    else:
+        unittest.main(argv=sys.argv[:1] + remainder, verbosity=args.verbose + 1)
