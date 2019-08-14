@@ -10,11 +10,17 @@ namespace hir {
 class Dialect : public mlir::Dialect {
  public:
   explicit Dialect(mlir::MLIRContext* ctx) : mlir::Dialect("pml_hir", ctx) {
-    addTypes<IndexedTensorType>();
+    addTypes<IndexedTensorType, AffineMapType>();
     addOperations<
 #define GET_OP_LIST
 #include "pmlc/dialect/hir/ops.cpp.inc"
         >();
+  }
+
+  void printType(mlir::Type type, llvm::raw_ostream& os) const override {
+    if (auto t = type.dyn_cast<AffineMapType>()) {
+      os << "map<" << std::to_string(t.ndims()) << ">";
+    }
   }
 };
 

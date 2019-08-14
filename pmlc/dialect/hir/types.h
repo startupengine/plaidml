@@ -30,10 +30,10 @@ class IndexedTensorType : public Type::TypeBase<IndexedTensorType, Type> {
 };
 
 struct AffineMapStorage : public mlir::TypeStorage {
-  explicit AffineMapStorage(int64_t ndim) : ndim(ndim) {}
+  explicit AffineMapStorage(int64_t ndims) : ndims(ndims) {}
 
   using KeyTy = int64_t;
-  bool operator==(const KeyTy& key) const { return key == ndim; }
+  bool operator==(const KeyTy& key) const { return key == ndims; }
 
   static AffineMapStorage* construct(         //
       mlir::TypeStorageAllocator& allocator,  // NOLINT
@@ -41,7 +41,7 @@ struct AffineMapStorage : public mlir::TypeStorage {
     return new (allocator.allocate<AffineMapStorage>()) AffineMapStorage(key);
   }
 
-  int64_t ndim;
+  int64_t ndims;
 };
 
 class AffineMapType : public Type::TypeBase<AffineMapType, Type, AffineMapStorage> {
@@ -50,9 +50,11 @@ class AffineMapType : public Type::TypeBase<AffineMapType, Type, AffineMapStorag
   static bool kindof(unsigned kind) {  //
     return kind == Kinds::AffineMap;
   }
-  static AffineMapType get(mlir::MLIRContext* context, int64_t ndim) {  //
-    return Base::get(context, Kinds::AffineMap, ndim);
+  static AffineMapType get(mlir::MLIRContext* context, int64_t ndims) {  //
+    return Base::get(context, Kinds::AffineMap, ndims);
   }
+
+  int64_t ndims() { return getImpl()->ndims; }
 };
 
 }  // namespace hir

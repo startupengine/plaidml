@@ -6,13 +6,18 @@
 #include <memory>
 #include <mutex>
 #include <sstream>
+#include <stack>
 #include <string>
+#include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include <boost/format.hpp>
 
+#include "mlir/IR/BlockAndValueMapping.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/Module.h"
+#include "mlir/Support/DebugStringHelper.h"
 
 #include "base/util/logging.h"
 #include "plaidml2/core/internal.h"
@@ -28,6 +33,7 @@ using namespace vertexai::tile::lang::ast;  // NOLINT
 using namespace pmlc::dialect::hir;         // NOLINT
 using namespace pmlc::dialect::scalar;      // NOLINT
 
+using mlir::Block;
 using mlir::MLIRContext;
 using mlir::ModuleOp;
 using mlir::OpBuilder;
@@ -81,7 +87,9 @@ class GlobalContext {
     return &context;
   }
 
+  static MLIRContext* get_context() { return &get()->context; }
   static OpBuilder* get_builder() { return &get()->builder; }
+  static ModuleOp get_module() { return get()->module; }
 
  private:
   MLIRContext context;
@@ -208,7 +216,11 @@ void plaidml_logical_shape_free(  //
 void plaidml_expr_free(  //
     plaidml_error* err,  //
     plaidml_expr* expr) {
-  ffi_wrap_void(err, [&] {  //
+  ffi_wrap_void(err, [&] {
+    auto op = expr->value->getDefiningOp();
+    if (op) {
+      op->erase();
+    }
     delete expr;
   });
 }
@@ -240,6 +252,7 @@ void plaidml_expr_bind_dims(  //
     size_t ndims,             //
     plaidml_dim_expr** dims) {
   return ffi_wrap_void(err, [&] {
+    IVLOG(1, "bind_dims");
     std::vector<DimExprPtr> vec_dims(ndims);
     for (size_t i = 0; i < ndims; i++) {
       vec_dims[i] = dims[i]->expr;
@@ -250,28 +263,47 @@ void plaidml_expr_bind_dims(  //
       // dims[i]->value = vec_dims[i]->value;
     }
     // auto type = expr->value->getType();
+    auto op = expr->value->getDefiningOp();
+    if (op) {
+      IVLOG(1, "def: " << mlir::debugString(*op));
+    }
+
+    // for (const auto& use : expr->value->getUses()) {
+    //   IVLOG(1, "use: " << mlir::debugString(*use.getOwner()));
+    // }
+
+    // for (const auto& user : expr->value->getUsers()) {
+    //   IVLOG(1, "user: " << mlir::debugString(*user));
+    // }
 
     // if (dims.size() != into->size()) {
     //   throw std::runtime_error(
     //       boost::str(boost::format("bind_dims() mismatch. Tensor shape: %1%, dims: %2%") % dims.size() %
     //       into->size()));
     // }
-    // for (size_t i = 0; i < dims.size(); i++) {
-    //   auto none_expr = std::dynamic_pointer_cast<DimNoneExpr>(into->at(i));
-    //   if (none_expr) {
-    //     (*into)[i] = dims[i].expr;
-    //   } else {
-    //     auto lhs_int = std::dynamic_pointer_cast<DimIntExpr>(into->at(i));
-    //     auto rhs_int = std::dynamic_pointer_cast<DimIntExpr>(dims[i].expr);
-    //     if (lhs_int && rhs_int) {
-    //       if (lhs_int->value != rhs_int->value) {
-    //         throw std::runtime_error(
-    //             boost::str(boost::format("bind_dims() mismatch on dim %1%. Required: %2%, Actual: %3%") % i %
-    //                        rhs_int->value % lhs_int->value));
-    //       }
-    //     }
-    //   }
-    // }
+    for (size_t i = 0; i < ndims; i++) {
+      if (dims[i]->value) {
+        IVLOG(1, "i: " << i << ", value: " << dims[i]->value);
+      } else {
+        auto builder = GlobalContext::get_builder();
+        auto op = builder->create<DimOp>(builder->getUnknownLoc(), expr->value, i).getOperation();
+        dims[i]->value = op->getResult(0);
+      }
+      //   auto none_expr = std::dynamic_pointer_cast<DimNoneExpr>(into->at(i));
+      //   if (none_expr) {
+      //     (*into)[i] = dims[i].expr;
+      //   } else {
+      //     auto lhs_int = std::dynamic_pointer_cast<DimIntExpr>(into->at(i));
+      //     auto rhs_int = std::dynamic_pointer_cast<DimIntExpr>(dims[i].expr);
+      //     if (lhs_int && rhs_int) {
+      //       if (lhs_int->value != rhs_int->value) {
+      //         throw std::runtime_error(
+      //             boost::str(boost::format("bind_dims() mismatch on dim %1%. Required: %2%, Actual: %3%") % i %
+      //                        rhs_int->value % lhs_int->value));
+      //       }
+      //     }
+      //   }
+    }
   });
 }
 
@@ -492,7 +524,6 @@ plaidml_expr* plaidml_expr_call(  //
   });
 }
 
-// AffineMapOp
 plaidml_expr* plaidml_expr_tensor_spec(  //
     plaidml_error* err,                  //
     plaidml_expr* ref,                   //
@@ -500,6 +531,7 @@ plaidml_expr* plaidml_expr_tensor_spec(  //
     plaidml_poly_expr** input_idxs,      //
     plaidml_dim_expr** output_dims) {
   return ffi_wrap<plaidml_expr*>(err, nullptr, [&] {
+    IVLOG(1, "plaidml_expr_tensor_spec");
     std::vector<DimExprPtr> vec_dims;
     std::vector<mlir::Value*> dim_values;
     std::vector<std::shared_ptr<PolyExpr>> vec_idxs(ndims);
@@ -518,18 +550,65 @@ plaidml_expr* plaidml_expr_tensor_spec(  //
     }
     auto builder = GlobalContext::get_builder();
     if (ref) {
-      IVLOG(1, "Build input");
       auto op = builder->create<AffineSourceMapOp>(builder->getUnknownLoc(), ref->value, idx_values).getOperation();
-      IVLOG(1, "Build input done");
       return new plaidml_expr{std::make_shared<TensorSpecExpr>(ref->expr, vec_idxs), op->getResult(0)};
-    } else {
-      IVLOG(1, "Build output: " << dim_values.size());
-      auto op = builder->create<AffineSinkMapOp>(builder->getUnknownLoc(), idx_values, dim_values).getOperation();
-      IVLOG(1, "Build output done");
-      return new plaidml_expr{std::make_shared<TensorSpecExpr>(vec_idxs, vec_dims), op->getResult(0)};
     }
+    auto op = builder->create<AffineSinkMapOp>(builder->getUnknownLoc(), idx_values, dim_values).getOperation();
+    return new plaidml_expr{std::make_shared<TensorSpecExpr>(vec_idxs, vec_dims), op->getResult(0)};
   });
 }
+
+class Traversal {
+ public:
+  Traversal() = default;
+  explicit Traversal(llvm::ArrayRef<mlir::Value*> values) {
+    for (auto value : values) {
+      Push(value);
+    }
+  }
+
+  void Push(mlir::Value* value) {  //
+    stack_.push(std::make_pair(value, false));
+  }
+
+  void Push(mlir::Operation* op) {
+    for (auto operand : op->getOperands()) {
+      Push(operand);
+    }
+    for (auto& region : op->getRegions()) {
+      for (auto& block : region) {
+        for (auto it = block.rbegin(); it != block.rend(); it++) {
+          Push(&*it);
+        }
+      }
+    }
+  }
+
+  std::vector<mlir::Value*> Traverse() {
+    std::vector<mlir::Value*> flat;
+    std::unordered_set<const mlir::Value*> seen;
+    while (stack_.size()) {
+      auto entry = stack_.top();
+      stack_.pop();
+      auto value = entry.first;
+      if (entry.second) {
+        IVLOG(1, "value: " << mlir::debugString(*value));
+        flat.emplace_back(value);
+      } else if (!seen.count(value)) {
+        seen.insert(value);
+        stack_.push(std::make_pair(value, true));
+        auto op = value->getDefiningOp();
+        if (op) {
+          Push(op);
+        }
+      }
+    }
+    return flat;
+  }
+
+ private:
+  std::stack<std::pair<mlir::Value*, bool>> stack_;
+};
 
 plaidml_expr* plaidml_expr_contraction(  //
     plaidml_error* err,                  //
@@ -541,6 +620,7 @@ plaidml_expr* plaidml_expr_contraction(  //
     const char* name,                    //
     const char* layout) {
   return ffi_wrap<plaidml_expr*>(err, nullptr, [&] {
+    IVLOG(1, "plaidml_expr_contraction");
     auto output = std::dynamic_pointer_cast<TensorSpecExpr>(raw_output->expr);
     if (!output) {
       throw std::runtime_error("oops: out_spec");
@@ -568,7 +648,46 @@ plaidml_expr* plaidml_expr_contraction(  //
     }
     expr->constraints = cc.constraints;
     expr->ComputeShape(layout);
-    return new plaidml_expr{expr};
+    // here
+    auto builder = GlobalContext::get_builder();
+    // Compute the sink shape of the contraction
+    auto elt_type = builder->getType<ScalarType>(DataType::FLOAT32);  // TODO
+    auto shape = RankedTensorType::get({1, 1}, elt_type);             // TODO
+    auto domain = builder->create<AffineDomainOp>(builder->getUnknownLoc(), shape).getOperation();
+    auto body = new Block();
+    domain->getRegion(0).push_back(body);
+    OpBuilder domain_builder(body);
+    // Find and replace each AffineIndexOp with a BlockArgument of the domain op
+    Traversal traversal;
+    traversal.Push(raw_output->value);
+    traversal.Push(raw_inputs[1]->value);
+    traversal.Push(raw_inputs[0]->value);
+    mlir::BlockAndValueMapping mapper;
+    for (auto value : traversal.Traverse()) {
+      auto op = value->getDefiningOp();
+      if (auto idx_op = llvm::dyn_cast<AffineIndexOp>(op)) {
+        auto arg = body->addArgument(idx_op.getType());
+        mapper.map(value, arg);
+        // value->replaceAllUsesWith(arg);
+        // for (auto user : value->getUsers()) {
+        //   IVLOG(1, "user: " << mlir::debugString(*user));
+        //   auto old_value = user->getResult(0);
+        //   auto new_value = domain_builder.clone(*user, mapper)->getResult(0);
+        //   mapper.map(old_value, new_value);
+        // }
+        // mapper.map(value, arg);
+      } else if (auto var_op = llvm::dyn_cast<PlaceholderOp>(op)) {
+      } else {
+        auto new_value = domain_builder.clone(*op, mapper)->getResult(0);
+        mapper.map(value, new_value);
+      }
+    }
+    auto src1 = mapper.lookup(raw_inputs[0]->value);
+    auto src2 = mapper.lookup(raw_inputs[1]->value);
+    auto sink = mapper.lookup(raw_output->value);
+    // Construct the terminal contraction op
+    domain_builder.create<ConSumMulOp>(builder->getUnknownLoc(), shape, src1, src2, sink);
+    return new plaidml_expr{expr, domain->getResult(0)};
   });
 }
 
@@ -652,7 +771,11 @@ void plaidml_deriv_register(  //
 }
 
 void plaidml_poly_expr_free(plaidml_error* err, plaidml_poly_expr* expr) {
-  ffi_wrap_void(err, [&] {  //
+  ffi_wrap_void(err, [&] {
+    auto op = expr->value->getDefiningOp();
+    if (op) {
+      op->erase();
+    }
     delete expr;
   });
 }
@@ -721,7 +844,11 @@ void plaidml_poly_expr_add_constraint(  //
 void plaidml_dim_expr_free(  //
     plaidml_error* err,      //
     plaidml_dim_expr* expr) {
-  ffi_wrap_void(err, [&] {  //
+  ffi_wrap_void(err, [&] {
+    auto op = expr->value->getDefiningOp();
+    if (op) {
+      op->erase();
+    }
     delete expr;
   });
 }
@@ -808,6 +935,7 @@ plaidml_program* plaidml_program_evaluate(  //
     plaidml_expr** src_updates,             //
     plaidml_expr** dst_updates) {
   return ffi_wrap<plaidml_program*>(err, nullptr, [&] {
+    IVLOG(1, "plaidml_program_evaluate");
     ProgramMutations mutations;
     std::vector<ExprPtr> outputs(noutputs);
     for (size_t i = 0; i < noutputs; i++) {
@@ -826,7 +954,38 @@ plaidml_program* plaidml_program_evaluate(  //
       }
       mutations.updates.emplace_back(ProgramUpdate{src_updates[i]->expr, dst_updates[i]->expr});
     }
-    auto ret = new plaidml_program{Evaluate(name, mutations)};
+    // here
+    auto module = GlobalContext::get_module();
+    module.dump();
+    auto ctx = GlobalContext::get_context();
+    auto func_type = mlir::FunctionType::get({}, {}, ctx);
+    auto loc = mlir::UnknownLoc::get(ctx);
+    auto func_op = mlir::FuncOp::create(loc, name, func_type, {});
+    func_op.addEntryBlock();
+    OpBuilder builder(func_op.getBody());
+    Traversal traversal;
+    for (size_t i = 0; i < noutputs; i++) {
+      traversal.Push(raw_outputs[i]->value);
+    }
+    mlir::BlockAndValueMapping mapper;
+    std::vector<PlaceholderOp> vars;
+    for (auto value : traversal.Traverse()) {
+      auto op = value->getDefiningOp();
+      if (op && op->getBlock() == module.getBody()) {
+        if (auto var_op = llvm::dyn_cast<PlaceholderOp>(op)) {
+          vars.push_back(var_op);
+        }
+        auto new_value = builder.clone(*op, mapper)->getResult(0);
+        mapper.map(value, new_value);
+      }
+    }
+    for (auto var : vars) {
+      auto value = var.getResult();
+      auto arg = func_op.getBody().front().addArgument(var.getType());
+      value->replaceAllUsesWith(arg);
+    }
+    func_op.dump();
+    auto ret = new plaidml_program{Evaluate(name, mutations), func_op};
     if (noutputs != ret->eval.outputs.size()) {
       throw std::runtime_error("Internal error: noutputs != ret->eval.outputs.size()");
     }

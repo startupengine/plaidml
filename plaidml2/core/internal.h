@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 
+#include "mlir/IR/Function.h"
 #include "mlir/IR/Value.h"
 
 #include "plaidml2/core/ffi.h"
@@ -29,6 +30,7 @@ struct plaidml_expr {
 
 struct plaidml_program {
   vertexai::tile::lang::ast::ProgramEvaluation eval;
+  mlir::FuncOp func;
 };
 
 struct plaidml_buffer {

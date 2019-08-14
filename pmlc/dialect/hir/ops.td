@@ -34,8 +34,9 @@ def DimOp : HirOp<"dim"> {
   let arguments = (ins AnyRankedTensor:$tensor, APIntAttr:$dim);
   let results = (outs Index);
   let builders = [OpBuilder<
-    "Builder* builder, OperationState* result, int64_t value", [{
+    "Builder* builder, OperationState* result, Value* tensor, int64_t value", [{
       auto type = builder->getIndexType();
+      result->addOperands(tensor);
       result->addAttribute("dim", builder->getIntegerAttr(type, value));
       result->addTypes(type);
     }]
@@ -67,7 +68,6 @@ def AffineIndexOp : HirOp<"idx"> {
 
 def AffineDomainOp : HirOp<"domain"> {
   let summary = "affine domain";
-  let arguments = (ins Variadic<AnyRankedTensor>:$operands);
   let results = (outs AnyRankedTensor);
   let regions = (region
     SizedRegion<1>:$body
@@ -97,7 +97,7 @@ def AffineSinkMapOp : HirOp<"msink"> {
     "Builder* builder, OperationState* result, ArrayRef<Value*> idxs, ArrayRef<Value*> dims", [{
       auto mapType = AffineMapType::get(builder->getContext(), idxs.size());
       result->addOperands(idxs);
-      // result->addOperands(dims);
+      result->addOperands(dims);
       result->addTypes(mapType);
     }]
   >];
