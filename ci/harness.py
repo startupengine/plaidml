@@ -20,7 +20,7 @@ def buildkite_metadata(key, default=None):
 
 
 def run(args, shargs):
-
+    running_shard = 0
     if shargs:
         print('running shard: ', shargs[3])
         running_shard = 1
@@ -161,8 +161,7 @@ def run(args, shargs):
     }
 
     report_fn = 'report.json'
-
-    if running_shard:
+    if running_shard == 1:
         report_fn = 'report' + shard_num + '.json'
 
     with (output / report_fn).open('w') as fp:
