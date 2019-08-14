@@ -20,10 +20,10 @@ def buildkite_metadata(key, default=None):
 
 
 def run(args, shargs):
-    running_shard = 0
+    am_in_shard is False
     if shargs:
         print('running shard: ', shargs[3])
-        running_shard = 1
+        am_in_shard is True
         shard_num = shargs[3]
 
     root = pathlib.Path('.').resolve() / 'tmp'
@@ -160,9 +160,10 @@ def run(args, shargs):
         'ref.execution_duration': result.ref.execution_duration,
     }
 
-    report_fn = 'report.json'
-    if running_shard == 1:
+    if am_in_shard is True:
         report_fn = 'report' + shard_num + '.json'
+    else:
+        report_fn = 'report.json'
 
     with (output / report_fn).open('w') as fp:
         util.printf('Writing:', fp.name)
