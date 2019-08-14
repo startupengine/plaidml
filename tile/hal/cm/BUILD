@@ -68,6 +68,7 @@ plaidml_cc_library(
     ],
     copts = [
   		'-Iexternal/cmheaders',
+  		'-Wno-overflow',
 	],
 	linkopts=[
 		'-rdynamic ' + cm_runtime_lib(),
@@ -78,7 +79,6 @@ plaidml_cc_library(
         "//base/util",
         "@boost//:filesystem",
         "@boost//:regex",
-		#"@cm//:cm_headers",
         "@cmheaders//:headers",
         "//tile/base",
         "//tile/base:hal",

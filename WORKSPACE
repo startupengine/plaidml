@@ -17,6 +17,6 @@ plaidml_workspace()
 
 new_local_repository(
     name = "cmheaders",
-    build_file = "BUILD.cm",
-    path = "/usr/local/include/",
+    build_file = "cmheaders.BUILD",
+    path = "/usr/include/",
 )
