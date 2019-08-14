@@ -100,6 +100,9 @@ def run(args):
     cmd_args = platform_cfg.get('prepend_args', []) + popt.get('prepend_args', [])
     cmd_args += platform_cfg.get('args', []) + popt.get('args', [])
     cmd_args += platform_cfg.get('append_args', []) + popt.get('append_args', [])
+
+    print(*cmd_args)
+
     ctx = dict(
         results=output,
         batch_size=args.batch_size,
