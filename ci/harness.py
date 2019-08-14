@@ -23,6 +23,7 @@ def run(args, shargs):
 
     if shargs:
         print('running shard: ', shargs[3])
+        running_shard = 1
         shard_num = shargs[3]
 
     root = pathlib.Path('.').resolve() / 'tmp'
@@ -160,7 +161,8 @@ def run(args, shargs):
     }
 
     report_fn = 'report.json'
-    if shargs:
+
+    if running_shard:
         report_fn = 'report' + shard_num + '.json'
 
     with (output / report_fn).open('w') as fp:
