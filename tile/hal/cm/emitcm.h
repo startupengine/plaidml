@@ -124,6 +124,7 @@ class Emit : public lang::EmitC {
   std::map<std::string, std::string> input_replace_map;
   std::set<std::string> dependent_index;
   std::set<std::string> independent_vector;
+  std::set<std::string> large_sparse_vactor;
   lang::KernelInfo ki_;
 };
 

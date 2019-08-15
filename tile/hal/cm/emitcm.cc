@@ -150,8 +150,11 @@ void Emit::Visit(const sem::SubscriptLVal& n) {
     n.ptr->Accept(*this);
     emit("(");
     n.offset->Accept(*this);
-    emit(" * ");
-    emit(vector_size);
+    auto is_lookup_lval = std::dynamic_pointer_cast<sem::LookupLVal>(n.ptr);
+    if (large_sparse_vactor.find(is_lookup_lval->name) == large_sparse_vactor.end()) {
+      emit(" * ");
+      emit(vector_size);
+    }
     return;
   }
   n.ptr->Accept(*this);
@@ -160,8 +163,10 @@ void Emit::Visit(const sem::SubscriptLVal& n) {
       independent_vector.find(is_lookup_lval->name) != independent_vector.end()) {
     emit("(");
     n.offset->Accept(*this);
-    emit(" * ");
-    emit(vector_size);
+    if (large_sparse_vactor.find(is_lookup_lval->name) == large_sparse_vactor.end()) {
+      emit(" * ");
+      emit(vector_size);
+    }
     emit(")");
     return;
   }
@@ -174,8 +179,10 @@ void Emit::Visit(const sem::SubscriptLVal& n) {
   }
   emit("(");
   n.offset->Accept(*this);
-  emit(" * ");
-  emit(vector_size);
+  if (large_sparse_vactor.find(is_lookup_lval->name) == large_sparse_vactor.end()) {
+    emit(" * ");
+    emit(vector_size);
+  }
   emit(")");
 }
 void Emit::Visit(const sem::UnaryExpr& n) {
@@ -811,7 +818,13 @@ void Emit::Visit(const sem::DeclareStmt& n) {
   }
 
   if (n.type.array) {
-    emitVector(ty, std::to_string(n.type.array) + " * " + vector_size, n.name);
+    if (n.type.array >= 160) {
+      large_sparse_vactor.insert(n.name);
+      emitVector(ty, std::to_string(n.type.array), n.name);
+      // throw std::runtime_error("cm vector exceeds maximum supported size");
+    } else {
+      emitVector(ty, std::to_string(n.type.array) + " * " + vector_size, n.name);
+    }
     emit(" = ");
     if (n.init) {
       n.init->Accept(*this);
