@@ -14,13 +14,14 @@ import util
 
 DEFAULT_BUILD_URL = 'https://buildkite.com/plaidml'
 
+am_in_shard = False
+
 
 def buildkite_metadata(key, default=None):
     return os.getenv('BUILDKITE_AGENT_META_DATA_' + key, os.getenv(key, default))
 
 
 def run(args, shargs):
-    am_in_shard is False
     if shargs:
         print('running shard: ', shargs[3])
         am_in_shard is True
